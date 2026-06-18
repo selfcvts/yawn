@@ -119,6 +119,15 @@ class CustomEmoji(BaseModel):
     uploaded_by: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+class ProfilePost(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    profile_username: str  # whose profile this is posted on
+    author: str  # who wrote the post
+    body: str
+    rich_content: Optional[dict] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 class AdminAction(BaseModel):
     action: str  # ban, mute, give_rep, remove_rep, assign_badge
     target_user: str
@@ -199,6 +208,7 @@ async def init_db():
     await db.threads.create_index([("category_id", 1), ("created_at", -1)])
     await db.posts.create_index([("thread_id", 1), ("created_at", 1)])
     await db.votes.create_index([("post_id", 1), ("username", 1)])
+    await db.profile_posts.create_index([("profile_username", 1), ("created_at", -1)])
 
 @app.on_event("startup")
 async def startup_event():
@@ -537,6 +547,69 @@ async def donate_rep(donation: RepDonation):
     )
     
     return {"message": f"Donated {donation.amount} rep to {donation.to_user}"}
+
+# ============================================================
+# PROFILE POST ROUTES
+# ============================================================
+
+@api_router.get("/users/{username}/profile-posts")
+async def get_profile_posts(username: str):
+    """Get all posts on a user's profile"""
+    posts = await db.profile_posts.find(
+        {"profile_username": username},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
+    return posts
+
+@api_router.post("/users/{username}/profile-posts")
+async def create_profile_post(
+    username: str,
+    author: str = Form(...),
+    body: str = Form(...),
+    rich_content: Optional[str] = Form(None)
+):
+    """Post a message on someone's profile"""
+    # Check if profile user exists
+    profile_user = await db.users.find_one({"username": username})
+    if not profile_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if author is muted
+    author_user = await db.users.find_one({"username": author})
+    if author_user and author_user.get("is_muted"):
+        if author_user.get("muted_until") and author_user["muted_until"] > datetime.now(timezone.utc):
+            raise HTTPException(status_code=403, detail="You are muted")
+    
+    import json
+    rich_data = json.loads(rich_content) if rich_content else None
+    
+    profile_post = ProfilePost(
+        profile_username=username,
+        author=author,
+        body=body,
+        rich_content=rich_data
+    )
+    
+    await db.profile_posts.insert_one(profile_post.model_dump())
+    
+    return profile_post.model_dump()
+
+@api_router.delete("/profile-posts/{post_id}")
+async def delete_profile_post(post_id: str, username: str = Form(...)):
+    """Delete a profile post (only author or profile owner can delete)"""
+    post = await db.profile_posts.find_one({"id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    # Check if user is author, profile owner, or admin
+    user = await db.users.find_one({"username": username})
+    is_admin = user and user.get("role") in ["admin", "owner"]
+    
+    if username != post["author"] and username != post["profile_username"] and not is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this post")
+    
+    await db.profile_posts.delete_one({"id": post_id})
+    return {"message": "Post deleted"}
 
 # ============================================================
 # CUSTOM EMOJI ROUTES

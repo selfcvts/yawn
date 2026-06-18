@@ -3,6 +3,7 @@ import axios from "axios";
 import "@/App.css";
 import { CategoryPage } from "./components/ForumComponents";
 import { AuthModal } from "./components/AuthModal";
+import { ProfilePage } from "./components/ProfilePage";
 import { useAuth } from "./hooks/useAuth";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -164,7 +165,14 @@ export default function App() {
           />
         )}
         {view.page === "thread" && <PlaceholderPage title="Thread page - Coming soon" />}
-        {view.page === "profile" && <PlaceholderPage title="Profile page - Coming soon" />}
+        {view.page === "profile" && (
+          <ProfilePage
+            username={view.username}
+            currentUser={user}
+            onBack={() => setView({ page: "home" })}
+            showToast={showToast}
+          />
+        )}
       </main>
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} showToast={showToast} />}
       {toast && <Toast msg={toast.msg} kind={toast.kind} />}
