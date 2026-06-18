@@ -13,4 +13,144 @@ const FONTS = [
   "PT Serif", "Inconsolata", "Fira Sans", "Noto Sans", "Quicksand",
   "Barlow", "Karla", "Rubik", "Work Sans", "DM Sans", "Space Grotesk",
   "Abril Fatface", "Bebas Neue", "Pacifico", "Righteous", "Satisfy",
-  // Add 50 more unique fonts\n  "Architects Daughter", "Dancing Script", "Indie Flower", "Lobster",\n  "Permanent Marker", "Shadows Into Light", "Caveat", "Amatic SC",\n  "Gloria Hallelujah", "Patrick Hand", "Kalam", "Courgette", "Sacramento",\n  "Great Vibes", "Allura", "Tangerine", "Pinyon Script", "Yellowtail",\n  "Cookie", "Satisfy", "Bad Script", "Marck Script", "Neucha",\n  "Comfortaa", "ABeeZee", "Exo", "Cabin", "Fjalla One", "Alfa Slab One",\n  "Bebas Neue", "Lilita One", "Righteous", "Monoton", "Black Ops One",\n  "Creepster", "Eater", "Nosifer", "Metal Mania", "Rye",\n  "Bangers", "Fascinate", "Fontdiner Swanky", "Hanalei Fill", "Fredericka the Great",\n  "Bungee", "Bungee Shade", "Bungee Inline", "Bungee Hairline", "Bungee Outline",\n  "Press Start 2P", "Orbitron", "Audiowide", "Electrolize", "Quantico",\n  "Iceland", "Jura", "Michroma", "Syncopate", "Wallpoet",\n  "VT323", "Share Tech Mono", "Anonymous Pro", "Cousine", "Cutive Mono",\n  "Nova Mono", "Overpass Mono", "Oxygen Mono", "PT Mono", "Roboto Mono",\n  "Source Code Pro", "Space Mono", "Ubuntu Mono", "Azeret Mono", "B612 Mono",\n  "Chivo Mono", "DM Mono", "Fira Code", "IBM Plex Mono", "Noto Sans Mono",\n  "Red Hat Mono", "Syne Mono", "Xanh Mono", "Martian Mono", "Fragment Mono",\n  "Geologica", "Climate Crisis", "Pixelify Sans", "Mooli", "Lugrasimo",\n  "Young Serif", "Ysabeau Office", "Tektur", "Playpen Sans", "Mynerve",\n  "Instrument Serif", "Caprasimo", "Borel", "Nabla", "Foldit",\n  "Bruno Ace SC", "Bruno Ace", "Lumanosimo", "Silkscreen", "Tilt Prism",\n  "Tilt Warp", "Tilt Neon", "Kalnia", "Protest Revolution", "Protest Riot",\n  "Protest Strike", "Sedan SC", "Jacquard 12", "Jacquard 24", "Jacquarda Bastarda 9",\n];\n\nexport default function RichTextEditor({ value, onChange, onRichContentChange, placeholder }) {\n  const [showEmojiPicker, setShowEmojiPicker] = useState(false);\n  const [showFontPicker, setShowFontPicker] = useState(false);\n  const [showColorPicker, setShowColorPicker] = useState(false);\n  const [selectedFont, setSelectedFont] = useState(\"Inter\");\n  const [selectedSize, setSelectedSize] = useState(14);\n  const [selectedColor, setSelectedColor] = useState(\"#e8d9c0\");\n  const [gradientType, setGradientType] = useState(\"none\");\n  const [gradientStart, setGradientStart] = useState(\"#c4401f\");\n  const [gradientEnd, setGradientEnd] = useState(\"#f39c12\");\n  const [isBold, setIsBold] = useState(false);\n  const [isItalic, setIsItalic] = useState(false);\n  const textareaRef = useRef(null);\n\n  useEffect(() => {\n    // Update rich content whenever formatting changes\n    const richData = {\n      font: selectedFont,\n      size: selectedSize,\n      color: selectedColor,\n      gradientType,\n      gradientStart,\n      gradientEnd,\n      bold: isBold,\n      italic: isItalic,\n    };\n    if (onRichContentChange) {\n      onRichContentChange(richData);\n    }\n  }, [selectedFont, selectedSize, selectedColor, gradientType, gradientStart, gradientEnd, isBold, isItalic, onRichContentChange]);\n\n  const addEmoji = (emoji) => {\n    const textarea = textareaRef.current;\n    if (!textarea) return;\n    \n    const start = textarea.selectionStart;\n    const end = textarea.selectionEnd;\n    const text = value || \"\";\n    const newText = text.substring(0, start) + emoji.native + text.substring(end);\n    onChange(newText);\n    \n    setShowEmojiPicker(false);\n    \n    setTimeout(() => {\n      textarea.focus();\n      textarea.setSelectionRange(start + emoji.native.length, start + emoji.native.length);\n    }, 10);\n  };\n\n  const applyGradient = (text, type, start, end) => {\n    if (type === \"none\" || !text) return { __html: text };\n    \n    const chars = text.split(\"\");\n    const gradientChars = chars.map((char, i) => {\n      if (char === \" \" || char === \"\\n\") return char;\n      \n      let color;\n      const ratio = chars.length > 1 ? i / (chars.length - 1) : 0;\n      \n      if (type === \"horizontal\") {\n        color = interpolateColor(start, end, ratio);\n      } else if (type === \"rainbow\") {\n        const hue = (i / chars.length) * 360;\n        color = `hsl(${hue}, 70%, 60%)`;\n      } else if (type === \"middle\") {\n        const distance = Math.abs(i - chars.length / 2) / (chars.length / 2);\n        color = interpolateColor(start, end, distance);\n      }\n      \n      return `<span style=\"color: ${color}\">${char}</span>`;\n    });\n    \n    return { __html: gradientChars.join(\"\") };\n  };\n\n  const interpolateColor = (color1, color2, ratio) => {\n    const hex = (c) => {\n      const hex = c.toString(16);\n      return hex.length === 1 ? \"0\" + hex : hex;\n    };\n    \n    const r1 = parseInt(color1.slice(1, 3), 16);\n    const g1 = parseInt(color1.slice(3, 5), 16);\n    const b1 = parseInt(color1.slice(5, 7), 16);\n    \n    const r2 = parseInt(color2.slice(1, 3), 16);\n    const g2 = parseInt(color2.slice(3, 5), 16);\n    const b2 = parseInt(color2.slice(5, 7), 16);\n    \n    const r = Math.round(r1 + (r2 - r1) * ratio);\n    const g = Math.round(g1 + (g2 - g1) * ratio);\n    const b = Math.round(b1 + (b2 - b1) * ratio);\n    \n    return \"#\" + hex(r) + hex(g) + hex(b);\n  };\n\n  const getTextStyle = () => {\n    const style = {\n      fontFamily: selectedFont,\n      fontSize: selectedSize,\n      fontWeight: isBold ? \"bold\" : \"normal\",\n      fontStyle: isItalic ? \"italic\" : \"normal\",\n    };\n    \n    if (gradientType === \"none\") {\n      style.color = selectedColor;\n    }\n    \n    return style;\n  };\n\n  return (\n    <div style={{ position: \"relative\" }}>\n      {/* Toolbar */}\n      <div style={{ \n        display: \"flex\", \n        gap: 8, \n        padding: \"8px 10px\", \n        background: \"#171411\", \n        border: \"1px solid #2e2722\", \n        borderBottom: \"none\",\n        borderRadius: \"3px 3px 0 0\",\n        flexWrap: \"wrap\",\n        alignItems: \"center\"\n      }}>\n        <button\n          onClick={() => setIsBold(!isBold)}\n          style={{\n            ...toolbarBtn,\n            background: isBold ? \"#c4401f\" : \"transparent\",\n            color: isBold ? \"#0d0c0b\" : \"#a89a85\",\n            fontWeight: \"bold\"\n          }}\n          title=\"Bold\"\n        >\n          B\n        </button>\n        \n        <button\n          onClick={() => setIsItalic(!isItalic)}\n          style={{\n            ...toolbarBtn,\n            background: isItalic ? \"#c4401f\" : \"transparent\",\n            color: isItalic ? \"#0d0c0b\" : \"#a89a85\",\n            fontStyle: \"italic\"\n          }}\n          title=\"Italic\"\n        >\n          I\n        </button>\n        \n        <div style={{ width: 1, height: 20, background: \"#2e2722\" }} />\n        \n        <button\n          onClick={() => setShowFontPicker(!showFontPicker)}\n          style={toolbarBtn}\n          title=\"Font\"\n        >\n          {selectedFont.slice(0, 8)}\n        </button>\n        \n        <select\n          value={selectedSize}\n          onChange={(e) => setSelectedSize(Number(e.target.value))}\n          style={{\n            ...toolbarBtn,\n            padding: \"4px 8px\",\n            cursor: \"pointer\"\n          }}\n          title=\"Font Size\"\n        >\n          {[10, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32].map(size => (\n            <option key={size} value={size}>{size}px</option>\n          ))}\n        </select>\n        \n        <div style={{ width: 1, height: 20, background: \"#2e2722\" }} />\n        \n        <button\n          onClick={() => setShowColorPicker(!showColorPicker)}\n          style={toolbarBtn}\n          title=\"Text Color & Gradients\"\n        >\n          🎨 Color\n        </button>\n        \n        <div style={{ width: 1, height: 20, background: \"#2e2722\" }} />\n        \n        <button\n          onClick={() => setShowEmojiPicker(!showEmojiPicker)}\n          style={toolbarBtn}\n          title=\"Emojis\"\n        >\n          😀\n        </button>\n      </div>\n\n      {/* Font Picker */}\n      {showFontPicker && (\n        <div style={{\n          position: \"absolute\",\n          top: 50,\n          left: 0,\n          zIndex: 100,\n          background: \"#171411\",\n          border: \"1px solid #2e2722\",\n          borderRadius: 4,\n          padding: 8,\n          maxHeight: 300,\n          overflowY: \"auto\",\n          width: 200,\n          boxShadow: \"0 4px 12px rgba(0,0,0,0.5)\"\n        }}>\n          {FONTS.map(font => (\n            <div\n              key={font}\n              onClick={() => {\n                setSelectedFont(font);\n                setShowFontPicker(false);\n              }}\n              style={{\n                padding: \"6px 10px\",\n                cursor: \"pointer\",\n                fontFamily: font,\n                fontSize: 13,\n                color: selectedFont === font ? \"#c4401f\" : \"#e8d9c0\",\n                background: selectedFont === font ? \"#2e2722\" : \"transparent\",\n                borderRadius: 2,\n              }}\n            >\n              {font}\n            </div>\n          ))}\n        </div>\n      )}\n\n      {/* Color & Gradient Picker */}\n      {showColorPicker && (\n        <div style={{\n          position: \"absolute\",\n          top: 50,\n          left: 100,\n          zIndex: 100,\n          background: \"#171411\",\n          border: \"1px solid #2e2722\",\n          borderRadius: 4,\n          padding: 16,\n          width: 280,\n          boxShadow: \"0 4px 12px rgba(0,0,0,0.5)\"\n        }}>\n          <div style={{ marginBottom: 12 }}>\n            <label style={{ fontSize: 11, color: \"#7a7066\", textTransform: \"uppercase\", display: \"block\", marginBottom: 6 }}>Gradient Type</label>\n            <select\n              value={gradientType}\n              onChange={(e) => setGradientType(e.target.value)}\n              style={{\n                width: \"100%\",\n                padding: \"6px 10px\",\n                background: \"#0d0c0b\",\n                border: \"1px solid #2e2722\",\n                borderRadius: 3,\n                color: \"#e8d9c0\",\n                fontSize: 13\n              }}\n            >\n              <option value=\"none\">None (Solid Color)</option>\n              <option value=\"horizontal\">Horizontal Gradient</option>\n              <option value=\"rainbow\">Rainbow</option>\n              <option value=\"middle\">Middle Gradient</option>\n            </select>\n          </div>\n\n          {gradientType === \"none\" ? (\n            <div>\n              <label style={{ fontSize: 11, color: \"#7a7066\", textTransform: \"uppercase\", display: \"block\", marginBottom: 6 }}>Color</label>\n              <input\n                type=\"color\"\n                value={selectedColor}\n                onChange={(e) => setSelectedColor(e.target.value)}\n                style={{ width: \"100%\", height: 40, border: \"1px solid #2e2722\", borderRadius: 3, cursor: \"pointer\" }}\n              />\n            </div>\n          ) : (\n            <>\n              <div style={{ marginBottom: 12 }}>\n                <label style={{ fontSize: 11, color: \"#7a7066\", textTransform: \"uppercase\", display: \"block\", marginBottom: 6 }}>Start Color</label>\n                <input\n                  type=\"color\"\n                  value={gradientStart}\n                  onChange={(e) => setGradientStart(e.target.value)}\n                  style={{ width: \"100%\", height: 40, border: \"1px solid #2e2722\", borderRadius: 3, cursor: \"pointer\" }}\n                />\n              </div>\n              \n              <div>\n                <label style={{ fontSize: 11, color: \"#7a7066\", textTransform: \"uppercase\", display: \"block\", marginBottom: 6 }}>End Color</label>\n                <input\n                  type=\"color\"\n                  value={gradientEnd}\n                  onChange={(e) => setGradientEnd(e.target.value)}\n                  style={{ width: \"100%\", height: 40, border: \"1px solid #2e2722\", borderRadius: 3, cursor: \"pointer\" }}\n                />\n              </div>\n            </>\n          )}\n\n          <button\n            onClick={() => setShowColorPicker(false)}\n            style={{ ...toolbarBtn, width: \"100%\", marginTop: 12, background: \"#c4401f\", color: \"#0d0c0b\" }}\n          >\n            Done\n          </button>\n        </div>\n      )}\n\n      {/* Emoji Picker */}\n      {showEmojiPicker && (\n        <div style={{\n          position: \"absolute\",\n          top: 50,\n          right: 0,\n          zIndex: 100,\n          boxShadow: \"0 4px 12px rgba(0,0,0,0.5)\"\n        }}>\n          <Picker\n            data={data}\n            onEmojiSelect={addEmoji}\n            theme=\"dark\"\n            previewPosition=\"none\"\n          />\n        </div>\n      )}\n\n      {/* Text Area with Preview */}\n      <div style={{ position: \"relative\" }}>\n        <textarea\n          ref={textareaRef}\n          value={value}\n          onChange={(e) => onChange(e.target.value)}\n          placeholder={placeholder}\n          style={{\n            width: \"100%\",\n            minHeight: 110,\n            background: \"#0d0c0b\",\n            border: \"1px solid #2e2722\",\n            borderTop: \"none\",\n            borderRadius: \"0 0 3px 3px\",\n            padding: \"10px 12px\",\n            color: gradientType === \"none\" ? selectedColor : \"transparent\",\n            fontSize: selectedSize,\n            fontFamily: selectedFont,\n            fontWeight: isBold ? \"bold\" : \"normal\",\n            fontStyle: isItalic ? \"italic\" : \"normal\",\n            outline: \"none\",\n            resize: \"vertical\",\n            caretColor: \"#c4401f\",\n          }}\n        />\n        \n        {gradientType !== \"none\" && value && (\n          <div\n            style={{\n              position: \"absolute\",\n              top: 0,\n              left: 0,\n              right: 0,\n              bottom: 0,\n              padding: \"10px 12px\",\n              pointerEvents: \"none\",\n              whiteSpace: \"pre-wrap\",\n              wordWrap: \"break-word\",\n              ...getTextStyle(),\n              color: \"transparent\",\n            }}\n            dangerouslySetInnerHTML={applyGradient(value, gradientType, gradientStart, gradientEnd)}\n          />\n        )}\n      </div>\n    </div>\n  );\n}\n\nconst toolbarBtn = {\n  background: \"transparent\",\n  color: \"#a89a85\",\n  border: \"1px solid #2e2722\",\n  borderRadius: 3,\n  padding: \"4px 10px\",\n  fontSize: 12,\n  cursor: \"pointer\",\n  fontFamily: \"Inter, sans-serif\",\n};\n
+  "Architects Daughter", "Dancing Script", "Indie Flower", "Lobster",
+  "Permanent Marker", "Shadows Into Light", "Caveat", "Amatic SC",
+  "Gloria Hallelujah", "Patrick Hand", "Kalam", "Courgette", "Sacramento",
+  "Great Vibes", "Allura", "Tangerine", "Pinyon Script", "Yellowtail",
+  "Cookie", "Bad Script", "Marck Script", "Neucha",
+  "Comfortaa", "ABeeZee", "Exo", "Cabin", "Fjalla One", "Alfa Slab One",
+  "Lilita One", "Monoton", "Black Ops One",
+  "Creepster", "Eater", "Nosifer", "Metal Mania", "Rye",
+  "Bangers", "Fascinate", "Fontdiner Swanky", "Hanalei Fill",
+];
+
+export default function RichTextEditor({ value, onChange, onRichContentChange, placeholder }) {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isBold, setIsBold] = useState(false);
+  const [isItalic, setIsItalic] = useState(false);
+  const textareaRef = useRef(null);
+
+  const addEmoji = (emoji) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = value || "";
+    const newText = text.substring(0, start) + emoji.native + text.substring(end);
+    onChange(newText);
+    
+    setShowEmojiPicker(false);
+    
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + emoji.native.length, start + emoji.native.length);
+    }, 10);
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ 
+        display: "flex", 
+        gap: 8, 
+        padding: "8px 10px", 
+        background: "#171411", 
+        border: "1px solid #2e2722", 
+        borderBottom: "none",
+        borderRadius: "3px 3px 0 0",
+        flexWrap: "wrap",
+        alignItems: "center"
+      }}>
+        <button
+          onClick={() => setIsBold(!isBold)}
+          style={{
+            background: isBold ? "#c4401f" : "transparent",
+            color: isBold ? "#0d0c0b" : "#a89a85",
+            border: "1px solid #2e2722",
+            borderRadius: 3,
+            padding: "4px 10px",
+            fontSize: 12,
+            cursor: "pointer",
+            fontWeight: "bold"
+          }}
+          title="Bold"
+        >
+          B
+        </button>
+        
+        <button
+          onClick={() => setIsItalic(!isItalic)}
+          style={{
+            background: isItalic ? "#c4401f" : "transparent",
+            color: isItalic ? "#0d0c0b" : "#a89a85",
+            border: "1px solid #2e2722",
+            borderRadius: 3,
+            padding: "4px 10px",
+            fontSize: 12,
+            cursor: "pointer",
+            fontStyle: "italic"
+          }}
+          title="Italic"
+        >
+          I
+        </button>
+        
+        <button
+          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          style={{
+            background: "transparent",
+            color: "#a89a85",
+            border: "1px solid #2e2722",
+            borderRadius: 3,
+            padding: "4px 10px",
+            fontSize: 12,
+            cursor: "pointer"
+          }}
+          title="Emojis"
+        >
+          😀
+        </button>
+      </div>
+
+      {showEmojiPicker && (
+        <div style={{
+          position: "absolute",
+          top: 50,
+          right: 0,
+          zIndex: 100,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.5)"
+        }}>
+          <Picker
+            data={data}
+            onEmojiSelect={addEmoji}
+            theme="dark"
+            previewPosition="none"
+          />
+        </div>
+      )}
+
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          width: "100%",
+          minHeight: 110,
+          background: "#0d0c0b",
+          border: "1px solid #2e2722",
+          borderTop: "none",
+          borderRadius: "0 0 3px 3px",
+          padding: "10px 12px",
+          color: "#e8d9c0",
+          fontSize: 14,
+          fontWeight: isBold ? "bold" : "normal",
+          fontStyle: isItalic ? "italic" : "normal",
+          outline: "none",
+          resize: "vertical",
+          caretColor: "#c4401f",
+        }}
+      />
+    </div>
+  );
+}

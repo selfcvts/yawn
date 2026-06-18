@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import axios from "axios";
 import "@/App.css";
-import data from '@emoji-mart/data';
-import Picker from '@emoji-mart/react';
+import { CategoryPage } from "./components/ForumComponents";
+import { AuthModal } from "./components/AuthModal";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -28,19 +28,10 @@ function timeAgo(iso) {
 
 const ICONS = {
   flame: "M12 2c.5 3-2 5-3.5 7C7 11 6 13 6 15a6 6 0 0012 0c0-2-1-3.5-2-5 .5 1.5 0 3-1 3.5.5-2-.5-4-2-5.5C13.5 6.5 13 4 12 2z",
-  barbell: "M4 9v6M2 10v4M6 8v8M9 11h6M18 8v8M22 10v4M20 9v6",
-  brain: "M9 4a3 3 0 00-3 3v1a3 3 0 00-1 5.5A3 3 0 008 18a3 3 0 003-2v-9a3 3 0 00-2-3zM15 4a3 3 0 013 3v1a3 3 0 011 5.5A3 3 0 0116 18a3 3 0 01-3-2V7a3 3 0 012-3z",
   star: "M12 2l2 6 6 2-5 4 1 6-6-3-6 3 1-6-5-4 6-2z",
   user: "M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0",
-  pin: "M12 2l2 6 6 2-5 4 1 6-6-3-6 3 1-6-5-4 6-2z",
-  close: "M6 6l12 12M18 6L6 18",
-  lock: "M6 11V8a6 6 0 0112 0v3M5 11h14v9H5z",
   arrow: "M5 12h14M13 6l6 6-6 6",
-  scroll: "M7 4h10a2 2 0 012 2v13a2 2 0 01-2-2H7a2 2 0 01-2-2V6a2 2 0 012-2zM7 4a2 2 0 00-2 2v11a2 2 0 002 2M9 9h6M9 13h4",
   globe: "M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z",
-  up: "M12 5l7 8h-5v6h-4v-6H5z",
-  down: "M12 19l-7-8h5V5h4v6h5z",
-  settings: "M12 15a3 3 0 100-6 3 3 0 000 6z",
 };
 
 function Icon({ name, size = 16, style = {} }) {
@@ -50,19 +41,6 @@ function Icon({ name, size = 16, style = {} }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, ...style }}>
       <path d={d} />
     </svg>
-  );
-}
-
-function EmberMeter({ streak }) {
-  const pct = Math.min(100, (streak / 30) * 100);
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <Icon name="flame" size={14} style={{ color: streak > 0 ? "#c4401f" : "#5a5450" }} />
-      <div style={{ flex: 1, height: 4, background: "#241f1a", borderRadius: 2, overflow: "hidden", minWidth: 40 }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg,#7a2412,#c4401f)", transition: "width .4s" }} />
-      </div>
-      <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#a89a85" }}>{streak}d</span>
-    </div>
   );
 }
 
@@ -121,8 +99,12 @@ export default function App() {
 
         const savedUsername = localStorage.getItem(SESSION_KEY);
         if (savedUsername) {
-          const { data: u } = await axios.get(`${API}/users/${savedUsername}`);
-          if (u) setUser(u);
+          try {
+            const { data: u } = await axios.get(`${API}/users/${savedUsername}`);
+            if (u) setUser(u);
+          } catch (error) {
+            localStorage.removeItem(SESSION_KEY);
+          }
         }
         setBooted(true);
       } catch (error) {
@@ -187,7 +169,6 @@ export default function App() {
         onLogout={handleLogout}
         onHome={() => setView({ page: "home" })}
         onProfile={() => user && setView({ page: "profile", username: user.username })}
-        onAdmin={() => setView({ page: "admin" })}
       />
       <main style={{ maxWidth: 920, margin: "0 auto", padding: "0 20px 80px" }}>
         {view.page === "home" && (
@@ -205,33 +186,14 @@ export default function App() {
           />
         )}
         {view.page === "thread" && (
-          <ThreadPage
-            threadId={view.threadId}
-            categoryId={view.categoryId}
-            categories={categories}
-            user={user}
-            onBack={() => setView({ page: "category", categoryId: view.categoryId })}
-            requireAuth={() => setAuthOpen(true)}
-            showToast={showToast}
-            onOpenProfile={(uname) => setView({ page: "profile", username: uname })}
-            refreshUser={refreshUser}
-          />
+          <div style={{ padding: 40, textAlign: "center", color: "#7a7066" }}>
+            Thread page - Coming soon
+          </div>
         )}
         {view.page === "profile" && (
-          <ProfilePage
-            username={view.username}
-            currentUser={user}
-            onBack={() => setView({ page: "home" })}
-            showToast={showToast}
-            refreshUser={refreshUser}
-          />
-        )}
-        {view.page === "admin" && user && ["admin", "owner"].includes(user.role) && (
-          <AdminPanel
-            currentUser={user}
-            onBack={() => setView({ page: "home" })}
-            showToast={showToast}
-          />
+          <div style={{ padding: 40, textAlign: "center", color: "#7a7066" }}>
+            Profile page - Coming soon
+          </div>
         )}
       </main>
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} showToast={showToast} />}
@@ -280,7 +242,7 @@ function Toast({ msg, kind }) {
   );
 }
 
-function Header({ user, onAuthOpen, onLogout, onHome, onProfile, onAdmin }) {
+function Header({ user, onAuthOpen, onLogout, onHome, onProfile }) {
   return (
     <header style={{ borderBottom: "1px solid #241f1a", background: "linear-gradient(180deg, #131110, #0d0c0b)", position: "sticky", top: 0, zIndex: 50 }}>
       <div style={{ maxWidth: 920, margin: "0 auto", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -290,9 +252,6 @@ function Header({ user, onAuthOpen, onLogout, onHome, onProfile, onAdmin }) {
         </div>
         {user ? (
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {["admin", "owner"].includes(user.role) && (
-              <button data-testid="admin-panel-button" onClick={onAdmin} style={{ ...ghostBtn, color: "#c4401f" }}>admin</button>
-            )}
             <div onClick={onProfile} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
               <Avatar name={user.username} size={26} imageUrl={user.profile_picture} />
               <span style={{ fontSize: 13, fontWeight: 500 }}>{user.username}</span>

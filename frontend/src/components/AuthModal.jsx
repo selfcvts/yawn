@@ -49,7 +49,7 @@ export function AuthModal({ onClose, onLogin, showToast }) {
 
   return (
     <div
-      data-testid=\"auth-modal\"
+      data-testid="auth-modal"
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -67,7 +67,7 @@ export function AuthModal({ onClose, onLogin, showToast }) {
 
         <label style={labelStyle}>username</label>
         <input 
-          data-testid=\"auth-username\"
+          data-testid="auth-username"
           value={username} 
           onChange={(e) => setUsername(e.target.value)} 
           style={inputStyle} 
@@ -76,7 +76,7 @@ export function AuthModal({ onClose, onLogin, showToast }) {
 
         <label style={{ ...labelStyle, marginTop: 12 }}>password</label>
         <input 
-          data-testid=\"auth-password\"
+          data-testid="auth-password"
           type="password" 
           value={password} 
           onChange={(e) => setPassword(e.target.value)} 
@@ -87,7 +87,7 @@ export function AuthModal({ onClose, onLogin, showToast }) {
         {err && <div style={{ color: "#e2725a", fontSize: 12.5, marginTop: 10 }}>{err}</div>}
 
         <button 
-          data-testid=\"auth-submit\"
+          data-testid="auth-submit"
           onClick={submit} 
           disabled={busy} 
           style={{ ...primaryBtn, width: "100%", marginTop: 18, opacity: busy ? 0.6 : 1 }}

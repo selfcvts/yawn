@@ -439,6 +439,53 @@ async def create_reply(
 # VOTING & REP ROUTES
 # ============================================================
 
+async def validate_mega_vote(user: dict, direction: int, now: datetime) -> None:
+    """Validate and update mega vote limits."""
+    is_admin = user.get("role") in ["admin", "owner"]
+    
+    if direction == 10:  # Mega rep
+        if not is_admin:
+            last_mega = user.get("last_mega_rep")
+            if last_mega and is_same_day(last_mega, now):
+                raise HTTPException(status_code=429, detail="Mega rep already used today")
+        await db.users.update_one({"username": user["username"]}, {"$set": {"last_mega_rep": now}})
+    
+    elif direction == -10:  # Mega dislike
+        if not is_admin:
+            last_mega = user.get("last_mega_dislike")
+            if last_mega and is_same_day(last_mega, now):
+                raise HTTPException(status_code=429, detail="Mega dislike already used today")
+        await db.users.update_one({"username": user["username"]}, {"$set": {"last_mega_dislike": now}})
+
+async def process_vote_update(post_id: str, username: str, direction: int, existing: dict, now: datetime) -> dict:
+    """Process vote update for existing vote."""
+    if existing.get("direction") == direction:
+        # Remove vote (toggle off)
+        await db.votes.delete_one({"post_id": post_id, "username": username})
+        return {"message": "Vote removed"}
+    else:
+        # Update vote
+        await db.votes.update_one(
+            {"post_id": post_id, "username": username},
+            {"$set": {"direction": direction, "created_at": now}}
+        )
+        return {"message": "Vote updated"}
+
+async def process_new_vote(post_id: str, username: str, direction: int) -> dict:
+    """Process new vote creation."""
+    vote = Vote(post_id=post_id, username=username, direction=direction)
+    await db.votes.insert_one(vote.model_dump())
+    
+    # Update post author's rep
+    post = await db.posts.find_one({"id": post_id})
+    if post:
+        await db.users.update_one(
+            {"username": post["author"]},
+            {"$inc": {"rep": direction}}
+        )
+    
+    return {"message": "Vote cast"}
+
 @api_router.post("/votes")
 async def cast_vote(
     post_id: str = Form(...),
@@ -455,51 +502,16 @@ async def cast_vote(
     
     # Check daily limits for mega votes
     now = datetime.now(timezone.utc)
-    is_admin = user.get("role") in ["admin", "owner"]
-    
-    if direction == 10:  # Mega rep
-        if not is_admin:
-            last_mega = user.get("last_mega_rep")
-            if last_mega and is_same_day(last_mega, now):
-                raise HTTPException(status_code=429, detail="Mega rep already used today")
-        await db.users.update_one({"username": username}, {"$set": {"last_mega_rep": now}})
-    
-    if direction == -10:  # Mega dislike
-        if not is_admin:
-            last_mega = user.get("last_mega_dislike")
-            if last_mega and is_same_day(last_mega, now):
-                raise HTTPException(status_code=429, detail="Mega dislike already used today")
-        await db.users.update_one({"username": username}, {"$set": {"last_mega_dislike": now}})
+    if abs(direction) == 10:
+        await validate_mega_vote(user, direction, now)
     
     # Check if vote exists
     existing = await db.votes.find_one({"post_id": post_id, "username": username})
     
     if existing:
-        if existing.get("direction") == direction:
-            # Remove vote (toggle off)
-            await db.votes.delete_one({"post_id": post_id, "username": username})
-            return {"message": "Vote removed"}
-        else:
-            # Update vote
-            await db.votes.update_one(
-                {"post_id": post_id, "username": username},
-                {"$set": {"direction": direction, "created_at": now}}
-            )
-            return {"message": "Vote updated"}
+        return await process_vote_update(post_id, username, direction, existing, now)
     else:
-        # Create new vote
-        vote = Vote(post_id=post_id, username=username, direction=direction)
-        await db.votes.insert_one(vote.model_dump())
-        
-        # Update post author's rep
-        post = await db.posts.find_one({"id": post_id})
-        if post:
-            await db.users.update_one(
-                {"username": post["author"]},
-                {"$inc": {"rep": direction}}
-            )
-        
-        return {"message": "Vote cast"}
+        return await process_new_vote(post_id, username, direction)
 
 @api_router.post("/rep/donate")
 async def donate_rep(donation: RepDonation):
@@ -554,6 +566,74 @@ async def upload_custom_emoji(
 # ADMIN ROUTES
 # ============================================================
 
+async def handle_ban_action(target_user: str) -> dict:
+    """Handle user ban action."""
+    await db.users.update_one(
+        {"username": target_user},
+        {"$set": {"is_banned": True}}
+    )
+    return {"message": f"Banned {target_user}"}
+
+async def handle_unban_action(target_user: str) -> dict:
+    """Handle user unban action."""
+    await db.users.update_one(
+        {"username": target_user},
+        {"$set": {"is_banned": False}}
+    )
+    return {"message": f"Unbanned {target_user}"}
+
+async def handle_mute_action(target_user: str, duration_hours: int) -> dict:
+    """Handle user mute action."""
+    muted_until = datetime.now(timezone.utc) + timedelta(hours=duration_hours or 24)
+    await db.users.update_one(
+        {"username": target_user},
+        {"$set": {"is_muted": True, "muted_until": muted_until}}
+    )
+    return {"message": f"Muted {target_user} for {duration_hours or 24} hours"}
+
+async def handle_unmute_action(target_user: str) -> dict:
+    """Handle user unmute action."""
+    await db.users.update_one(
+        {"username": target_user},
+        {"$set": {"is_muted": False, "muted_until": None}}
+    )
+    return {"message": f"Unmuted {target_user}"}
+
+async def handle_give_rep_action(target_user: str, value: int) -> dict:
+    """Handle give rep action."""
+    await db.users.update_one(
+        {"username": target_user},
+        {"$inc": {"rep": value or 0}}
+    )
+    return {"message": f"Gave {value} rep to {target_user}"}
+
+async def handle_remove_rep_action(target_user: str, value: int) -> dict:
+    """Handle remove rep action."""
+    await db.users.update_one(
+        {"username": target_user},
+        {"$inc": {"rep": -(value or 0)}}
+    )
+    return {"message": f"Removed {value} rep from {target_user}"}
+
+async def handle_assign_badge_action(target_user: str, badge_text: str) -> dict:
+    """Handle assign badge action."""
+    await db.users.update_one(
+        {"username": target_user},
+        {"$set": {"custom_badge": badge_text}}
+    )
+    return {"message": f"Assigned badge to {target_user}"}
+
+# Action handler mapping
+ADMIN_ACTION_HANDLERS = {
+    "ban": lambda data: handle_ban_action(data.target_user),
+    "unban": lambda data: handle_unban_action(data.target_user),
+    "mute": lambda data: handle_mute_action(data.target_user, data.duration_hours),
+    "unmute": lambda data: handle_unmute_action(data.target_user),
+    "give_rep": lambda data: handle_give_rep_action(data.target_user, data.value),
+    "remove_rep": lambda data: handle_remove_rep_action(data.target_user, data.value),
+    "assign_badge": lambda data: handle_assign_badge_action(data.target_user, data.badge_text),
+}
+
 @api_router.post("/admin/action")
 async def admin_action(action_data: AdminAction, admin_username: str = Form(...)):
     if not await is_admin_or_owner(admin_username):
@@ -563,58 +643,11 @@ async def admin_action(action_data: AdminAction, admin_username: str = Form(...)
     if not target_user:
         raise HTTPException(status_code=404, detail="Target user not found")
     
-    if action_data.action == "ban":
-        await db.users.update_one(
-            {"username": action_data.target_user},
-            {"$set": {"is_banned": True}}
-        )
-        return {"message": f"Banned {action_data.target_user}"}
-    
-    elif action_data.action == "mute":
-        muted_until = datetime.now(timezone.utc) + timedelta(hours=action_data.duration_hours or 24)
-        await db.users.update_one(
-            {"username": action_data.target_user},
-            {"$set": {"is_muted": True, "muted_until": muted_until}}
-        )
-        return {"message": f"Muted {action_data.target_user} for {action_data.duration_hours or 24} hours"}
-    
-    elif action_data.action == "give_rep":
-        await db.users.update_one(
-            {"username": action_data.target_user},
-            {"$inc": {"rep": action_data.value or 0}}
-        )
-        return {"message": f"Gave {action_data.value} rep to {action_data.target_user}"}
-    
-    elif action_data.action == "remove_rep":
-        await db.users.update_one(
-            {"username": action_data.target_user},
-            {"$inc": {"rep": -(action_data.value or 0)}}
-        )
-        return {"message": f"Removed {action_data.value} rep from {action_data.target_user}"}
-    
-    elif action_data.action == "assign_badge":
-        await db.users.update_one(
-            {"username": action_data.target_user},
-            {"$set": {"custom_badge": action_data.badge_text}}
-        )
-        return {"message": f"Assigned badge to {action_data.target_user}"}
-    
-    elif action_data.action == "unban":
-        await db.users.update_one(
-            {"username": action_data.target_user},
-            {"$set": {"is_banned": False}}
-        )
-        return {"message": f"Unbanned {action_data.target_user}"}
-    
-    elif action_data.action == "unmute":
-        await db.users.update_one(
-            {"username": action_data.target_user},
-            {"$set": {"is_muted": False, "muted_until": None}}
-        )
-        return {"message": f"Unmuted {action_data.target_user}"}
-    
-    else:
+    handler = ADMIN_ACTION_HANDLERS.get(action_data.action)
+    if not handler:
         raise HTTPException(status_code=400, detail="Invalid action")
+    
+    return await handler(action_data)
 
 @api_router.post("/threads/{thread_id}/move-to-best")
 async def move_to_best(thread_id: str, mod_username: str = Form(...)):
