@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import RichTextEditor from "./RichTextEditor";
+import { EMOJI_GG_REACTIONS, getEmojiUrl } from "../utils/emojis";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -22,6 +23,9 @@ function timeAgo(iso) {
 const ICONS = {
   arrow: "M5 12h14M13 6l6 6-6 6",
   trash: "M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6",
+  image: "M4 16l4-4 4 4 6-6 4 4M4 4h16v16H4z",
+  video: "M15 10l5-3v12l-5-3M5 6h9a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2z",
+  close: "M6 6l12 12M18 6L6 18",
 };
 
 function Icon({ name, size = 16, style = {} }) {
@@ -78,6 +82,11 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
   const [postBody, setPostBody] = useState("");
   const [richContent, setRichContent] = useState(null);
   const [posting, setPosting] = useState(false);
+  const [imageUrl, setImageUrl] = useState(null);
+  const [videoUrl, setVideoUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  const videoInputRef = useRef(null);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -97,13 +106,61 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
     loadProfile();
   }, [loadProfile]);
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Image must be less than 5MB", "error");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const { data } = await axios.post(`${API}/upload/image`, formData);
+      setImageUrl(data.url);
+      showToast("Image uploaded");
+    } catch (error) {
+      showToast("Failed to upload image", "error");
+    }
+    setUploading(false);
+  };
+
+  const handleVideoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file size (max 20MB)
+    if (file.size > 20 * 1024 * 1024) {
+      showToast("Video must be less than 20MB", "error");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const { data } = await axios.post(`${API}/upload/video`, formData);
+      setVideoUrl(data.url);
+      showToast("Video uploaded");
+    } catch (error) {
+      showToast("Failed to upload video", "error");
+    }
+    setUploading(false);
+  };
+
   const handlePostSubmit = async () => {
     if (!currentUser) {
       showToast("You must be logged in to post", "error");
       return;
     }
     
-    if (!postBody.trim()) {
+    if (!postBody.trim() && !imageUrl && !videoUrl) {
       showToast("Post cannot be empty", "error");
       return;
     }
@@ -112,14 +169,22 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
     try {
       const formData = new FormData();
       formData.append("author", currentUser.username);
-      formData.append("body", postBody.trim());
+      formData.append("body", postBody.trim() || " ");
       if (richContent) {
         formData.append("rich_content", JSON.stringify(richContent));
+      }
+      if (imageUrl) {
+        formData.append("image_url", imageUrl);
+      }
+      if (videoUrl) {
+        formData.append("video_url", videoUrl);
       }
 
       await axios.post(`${API}/users/${username}/profile-posts`, formData);
       setPostBody("");
       setRichContent(null);
+      setImageUrl(null);
+      setVideoUrl(null);
       showToast("Posted to profile");
       loadProfile();
     } catch (error) {
@@ -139,6 +204,23 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
       loadProfile();
     } catch (error) {
       showToast(error.response?.data?.detail || "Could not delete post", "error");
+    }
+  };
+
+  const handleReaction = async (postId, emojiName) => {
+    if (!currentUser) {
+      showToast("You must be logged in to react", "error");
+      return;
+    }
+
+    try {
+      await axios.post(`${API}/profile-posts/${postId}/react`, {
+        emoji_name: emojiName,
+        username: currentUser.username
+      });
+      loadProfile();
+    } catch (error) {
+      showToast("Could not add reaction", "error");
     }
   };
 
@@ -219,7 +301,7 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
             {/* Post Box */}
             {currentUser && (
               <div style={cardStyle}>
-                <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                <div style={{ display: "flex", gap: 12 }}>
                   <Avatar name={currentUser.username} size={40} imageUrl={currentUser.profile_picture} />
                   <div style={{ flex: 1 }}>
                     <RichTextEditor
@@ -228,13 +310,73 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
                       onRichContentChange={setRichContent}
                       placeholder="Write something..."
                     />
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+                    
+                    {/* Media Previews */}
+                    {imageUrl && (
+                      <div style={{ marginTop: 10, position: "relative", display: "inline-block" }}>
+                        <img src={imageUrl} alt="Upload preview" style={{ maxWidth: 300, maxHeight: 200, borderRadius: 4, border: "1px solid #2e2722" }} />
+                        <button
+                          onClick={() => setImageUrl(null)}
+                          style={{ position: "absolute", top: 4, right: 4, background: "#171411", border: "1px solid #2e2722", borderRadius: 3, padding: 4, cursor: "pointer" }}
+                        >
+                          <Icon name="close" size={12} style={{ color: "#e2725a" }} />
+                        </button>
+                      </div>
+                    )}
+                    
+                    {videoUrl && (
+                      <div style={{ marginTop: 10, position: "relative", display: "inline-block" }}>
+                        <video src={videoUrl} controls style={{ maxWidth: 300, maxHeight: 200, borderRadius: 4, border: "1px solid #2e2722" }} />
+                        <button
+                          onClick={() => setVideoUrl(null)}
+                          style={{ position: "absolute", top: 4, right: 4, background: "#171411", border: "1px solid #2e2722", borderRadius: 3, padding: 4, cursor: "pointer" }}
+                        >
+                          <Icon name="close" size={12} style={{ color: "#e2725a" }} />
+                        </button>
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          style={{ display: "none" }}
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploading}
+                          style={mediaBtn}
+                          title="Upload image"
+                        >
+                          <Icon name="image" size={16} />
+                        </button>
+
+                        <input
+                          ref={videoInputRef}
+                          type="file"
+                          accept="video/*"
+                          onChange={handleVideoUpload}
+                          style={{ display: "none" }}
+                        />
+                        <button
+                          onClick={() => videoInputRef.current?.click()}
+                          disabled={uploading}
+                          style={mediaBtn}
+                          title="Upload video"
+                        >
+                          <Icon name="video" size={16} />
+                        </button>
+                      </div>
+
                       <button
                         onClick={handlePostSubmit}
-                        disabled={posting}
-                        style={{ ...primaryBtn, opacity: posting ? 0.6 : 1 }}
+                        disabled={posting || uploading}
+                        style={{ ...primaryBtn, opacity: (posting || uploading) ? 0.6 : 1 }}
                       >
-                        {posting ? "Posting..." : "Post"}
+                        {uploading ? "Uploading..." : posting ? "Posting..." : "Post"}
                       </button>
                     </div>
                   </div>
@@ -255,6 +397,7 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
                   currentUser={currentUser}
                   profileOwner={user.username}
                   onDelete={() => handleDeletePost(post.id)}
+                  onReact={(emojiName) => handleReaction(post.id, emojiName)}
                 />
               ))
             )}
@@ -322,13 +465,18 @@ function Tab({ label, active, onClick }) {
   );
 }
 
-function ProfilePostItem({ post, currentUser, profileOwner, onDelete }) {
+function ProfilePostItem({ post, currentUser, profileOwner, onDelete, onReact }) {
   const [hover, setHover] = useState(false);
+  const [showReactions, setShowReactions] = useState(false);
+  
   const canDelete = currentUser && (
     currentUser.username === post.author || 
     currentUser.username === profileOwner ||
     ["admin", "owner"].includes(currentUser.role)
   );
+
+  const reactions = post.reactions || {};
+  const totalReactions = Object.values(reactions).reduce((sum, users) => sum + users.length, 0);
 
   return (
     <div
@@ -346,8 +494,123 @@ function ProfilePostItem({ post, currentUser, profileOwner, onDelete }) {
             <span style={{ color: "#5a5450", fontSize: 12 }}>{timeAgo(post.created_at)}</span>
           </div>
           
-          <div style={{ color: "#e8d9c0", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+          <div style={{ color: "#e8d9c0", lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 12 }}>
             {post.body}
+          </div>
+
+          {/* Image */}
+          {post.image_url && (
+            <div style={{ marginBottom: 12 }}>
+              <img 
+                src={post.image_url} 
+                alt="Post" 
+                style={{ maxWidth: "100%", maxHeight: 400, borderRadius: 4, border: "1px solid #2e2722" }} 
+              />
+            </div>
+          )}
+
+          {/* Video */}
+          {post.video_url && (
+            <div style={{ marginBottom: 12 }}>
+              <video 
+                src={post.video_url} 
+                controls 
+                style={{ maxWidth: "100%", maxHeight: 400, borderRadius: 4, border: "1px solid #2e2722" }} 
+              />
+            </div>
+          )}
+
+          {/* Reactions Bar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setShowReactions(!showReactions)}
+                style={{
+                  background: "#2e2722",
+                  border: "1px solid #3a3530",
+                  borderRadius: 3,
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  color: "#a89a85",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                😊 React {totalReactions > 0 && `(${totalReactions})`}
+              </button>
+
+              {showReactions && (
+                <div style={{
+                  position: "absolute",
+                  bottom: "100%",
+                  left: 0,
+                  marginBottom: 8,
+                  background: "#171411",
+                  border: "1px solid #2e2722",
+                  borderRadius: 4,
+                  padding: 8,
+                  display: "flex",
+                  gap: 6,
+                  zIndex: 10,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                }}>
+                  {EMOJI_GG_REACTIONS.map(emoji => (
+                    <button
+                      key={emoji.name}
+                      onClick={() => {
+                        onReact(emoji.name);
+                        setShowReactions(false);
+                      }}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 4,
+                      }}
+                      title={emoji.name}
+                    >
+                      <img src={emoji.url} alt={emoji.name} style={{ width: 24, height: 24 }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Display existing reactions */}
+            {Object.keys(reactions).length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {Object.entries(reactions).map(([emojiName, users]) => {
+                  if (users.length === 0) return null;
+                  const emojiUrl = getEmojiUrl(emojiName);
+                  const hasReacted = currentUser && users.includes(currentUser.username);
+                  
+                  return (
+                    <button
+                      key={emojiName}
+                      onClick={() => onReact(emojiName)}
+                      style={{
+                        background: hasReacted ? "#2e2722" : "#1c1814",
+                        border: `1px solid ${hasReacted ? "#c4401f" : "#2e2722"}`,
+                        borderRadius: 3,
+                        padding: "4px 8px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        fontSize: 12,
+                        color: "#a89a85",
+                      }}
+                      title={users.join(", ")}
+                    >
+                      {emojiUrl && <img src={emojiUrl} alt={emojiName} style={{ width: 16, height: 16 }} />}
+                      <span>{users.length}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -403,4 +666,16 @@ const primaryBtn = {
   fontFamily: "Oswald, sans-serif",
   letterSpacing: 0.5,
   textTransform: "uppercase",
+};
+
+const mediaBtn = {
+  background: "#2e2722",
+  border: "1px solid #3a3530",
+  borderRadius: 3,
+  padding: "6px 10px",
+  cursor: "pointer",
+  color: "#a89a85",
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
 };

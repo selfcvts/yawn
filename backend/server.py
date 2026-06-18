@@ -126,7 +126,14 @@ class ProfilePost(BaseModel):
     author: str  # who wrote the post
     body: str
     rich_content: Optional[dict] = None
+    image_url: Optional[str] = None  # uploaded image
+    video_url: Optional[str] = None  # uploaded video
+    reactions: dict = {}  # {emoji_name: [list of usernames]}
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class Reaction(BaseModel):
+    emoji_name: str
+    username: str
 
 class AdminAction(BaseModel):
     action: str  # ban, mute, give_rep, remove_rep, assign_badge
@@ -566,7 +573,9 @@ async def create_profile_post(
     username: str,
     author: str = Form(...),
     body: str = Form(...),
-    rich_content: Optional[str] = Form(None)
+    rich_content: Optional[str] = Form(None),
+    image_url: Optional[str] = Form(None),
+    video_url: Optional[str] = Form(None)
 ):
     """Post a message on someone's profile"""
     # Check if profile user exists
@@ -587,7 +596,10 @@ async def create_profile_post(
         profile_username=username,
         author=author,
         body=body,
-        rich_content=rich_data
+        rich_content=rich_data,
+        image_url=image_url,
+        video_url=video_url,
+        reactions={}
     )
     
     await db.profile_posts.insert_one(profile_post.model_dump())
@@ -610,6 +622,69 @@ async def delete_profile_post(post_id: str, username: str = Form(...)):
     
     await db.profile_posts.delete_one({"id": post_id})
     return {"message": "Post deleted"}
+
+@api_router.post("/profile-posts/{post_id}/react")
+async def add_reaction(post_id: str, reaction: Reaction):
+    """Add or toggle a reaction to a profile post"""
+    post = await db.profile_posts.find_one({"id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    reactions = post.get("reactions", {})
+    emoji_name = reaction.emoji_name
+    username = reaction.username
+    
+    # Initialize emoji reactions list if doesn't exist
+    if emoji_name not in reactions:
+        reactions[emoji_name] = []
+    
+    # Toggle reaction - remove if exists, add if doesn't
+    if username in reactions[emoji_name]:
+        reactions[emoji_name].remove(username)
+        # Remove emoji key if no reactions left
+        if len(reactions[emoji_name]) == 0:
+            del reactions[emoji_name]
+    else:
+        reactions[emoji_name].append(username)
+    
+    await db.profile_posts.update_one(
+        {"id": post_id},
+        {"$set": {"reactions": reactions}}
+    )
+    
+    return {"message": "Reaction updated", "reactions": reactions}
+
+@api_router.post("/upload/image")
+async def upload_image(file: UploadFile = File(...)):
+    """Upload an image and return base64 data URL"""
+    # Validate file type
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    # Read file content
+    contents = await file.read()
+    
+    # Convert to base64
+    base64_data = base64.b64encode(contents).decode('utf-8')
+    data_url = f"data:{file.content_type};base64,{base64_data}"
+    
+    return {"url": data_url}
+
+@api_router.post("/upload/video")
+async def upload_video(file: UploadFile = File(...)):
+    """Upload a video and return base64 data URL"""
+    # Validate file type
+    if not file.content_type.startswith("video/"):
+        raise HTTPException(status_code=400, detail="File must be a video")
+    
+    # Read file content
+    contents = await file.read()
+    
+    # Convert to base64
+    base64_data = base64.b64encode(contents).decode('utf-8')
+    data_url = f"data:{file.content_type};base64,{base64_data}"
+    
+    return {"url": data_url}
 
 # ============================================================
 # CUSTOM EMOJI ROUTES
