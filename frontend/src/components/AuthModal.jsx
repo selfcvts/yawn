@@ -19,33 +19,114 @@ function Icon({ name, size = 16, style = {} }) {
   );
 }
 
-export function AuthModal({ onClose, onLogin, showToast }) {
-  const [mode, setMode] = useState("login");
+// Validation helpers
+const validateUsername = (username) => {
+  if (username.length < 3 || username.length > 20) {
+    return "Username must be 3-20 characters";
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    return "Username: letters, numbers, underscore only";
+  }
+  return null;
+};
+
+const validatePassword = (password, isSignup) => {
+  if (isSignup && password.length < 6) {
+    return "Password must be at least 6 characters";
+  }
+  return null;
+};
+
+// Login/Signup form component
+function AuthForm({ mode, onSubmit, busy, error }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+
+  const handleSubmit = () => {
+    onSubmit(username.trim(), password);
+  };
+
+  return (
+    <>
+      <label style={labelStyle}>username</label>
+      <input 
+        data-testid="auth-username"
+        value={username} 
+        onChange={(e) => setUsername(e.target.value)} 
+        style={inputStyle} 
+        onKeyDown={(e) => e.key === "Enter" && handleSubmit()} 
+        autoFocus
+      />
+
+      <label style={{ ...labelStyle, marginTop: 12 }}>password</label>
+      <input 
+        data-testid="auth-password"
+        type="password" 
+        value={password} 
+        onChange={(e) => setPassword(e.target.value)} 
+        style={inputStyle} 
+        onKeyDown={(e) => e.key === "Enter" && handleSubmit()} 
+      />
+
+      {error && <div style={{ color: "#e2725a", fontSize: 12.5, marginTop: 10 }}>{error}</div>}
+
+      <button 
+        data-testid="auth-submit"
+        onClick={handleSubmit} 
+        disabled={busy} 
+        style={{ ...primaryBtn, width: "100%", marginTop: 18, opacity: busy ? 0.6 : 1 }}
+      >
+        {busy ? "..." : mode === "login" ? "sign in" : "create account"}
+      </button>
+    </>
+  );
+}
+
+export function AuthModal({ onClose, onLogin, showToast }) {
+  const [mode, setMode] = useState("login");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  async function submit() {
+  const handleSubmit = async (username, password) => {
     setErr("");
-    const uname = username.trim();
-    if (!uname || !password) { setErr("Username and password required."); return; }
-    if (mode === "signup" && (uname.length < 3 || uname.length > 20 || !/^[a-zA-Z0-9_]+$/.test(uname))) {
-      setErr("Username must be 3-20 chars: letters, numbers, underscore."); return;
+    
+    if (!username || !password) {
+      setErr("Username and password required");
+      return;
     }
-    if (mode === "signup" && password.length < 6) { setErr("Password must be at least 6 characters."); return; }
+
+    // Validate based on mode
+    if (mode === "signup") {
+      const usernameError = validateUsername(username);
+      if (usernameError) {
+        setErr(usernameError);
+        return;
+      }
+      
+      const passwordError = validatePassword(password, true);
+      if (passwordError) {
+        setErr(passwordError);
+        return;
+      }
+    }
 
     setBusy(true);
     try {
       const endpoint = mode === "signup" ? "/auth/signup" : "/auth/login";
-      const { data } = await axios.post(`${API}${endpoint}`, { username: uname, password });
-      showToast(mode === "signup" ? `Welcome, ${uname}.` : `Welcome back, ${uname}.`);
+      const { data } = await axios.post(`${API}${endpoint}`, { username, password });
+      showToast(mode === "signup" ? `Welcome, ${username}.` : `Welcome back, ${username}.`);
       onLogin(data);
     } catch (error) {
       setErr(error.response?.data?.detail || "Something went wrong.");
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-  }
+  };
+
+  const switchMode = () => {
+    setMode(mode === "login" ? "signup" : "login");
+    setErr("");
+  };
 
   return (
     <div
@@ -57,49 +138,25 @@ export function AuthModal({ onClose, onLogin, showToast }) {
         <button onClick={onClose} style={{ position: "absolute", top: 16, right: 16, background: "transparent", border: "none", color: "#5a5450", cursor: "pointer" }}>
           <Icon name="close" size={18} />
         </button>
+        
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <Icon name="lock" size={16} style={{ color: "#c4401f" }} />
-          <span style={{ fontFamily: "Oswald, sans-serif", fontSize: 18, fontWeight: 600 }}>{mode === "login" ? "sign in" : "create account"}</span>
+          <span style={{ fontFamily: "Oswald, sans-serif", fontSize: 18, fontWeight: 600 }}>
+            {mode === "login" ? "sign in" : "create account"}
+          </span>
         </div>
+        
         <p style={{ color: "#5a5450", fontSize: 12.5, marginTop: 4, marginBottom: 20 }}>
           Join the looksmax community forum.
         </p>
 
-        <label style={labelStyle}>username</label>
-        <input 
-          data-testid="auth-username"
-          value={username} 
-          onChange={(e) => setUsername(e.target.value)} 
-          style={inputStyle} 
-          onKeyDown={(e) => e.key === "Enter" && submit()} 
-        />
-
-        <label style={{ ...labelStyle, marginTop: 12 }}>password</label>
-        <input 
-          data-testid="auth-password"
-          type="password" 
-          value={password} 
-          onChange={(e) => setPassword(e.target.value)} 
-          style={inputStyle} 
-          onKeyDown={(e) => e.key === "Enter" && submit()} 
-        />
-
-        {err && <div style={{ color: "#e2725a", fontSize: 12.5, marginTop: 10 }}>{err}</div>}
-
-        <button 
-          data-testid="auth-submit"
-          onClick={submit} 
-          disabled={busy} 
-          style={{ ...primaryBtn, width: "100%", marginTop: 18, opacity: busy ? 0.6 : 1 }}
-        >
-          {busy ? "..." : mode === "login" ? "sign in" : "create account"}
-        </button>
+        <AuthForm mode={mode} onSubmit={handleSubmit} busy={busy} error={err} />
 
         <div style={{ textAlign: "center", marginTop: 16, fontSize: 12.5, color: "#5a5450" }}>
           {mode === "login" ? (
-            <>no account? <span onClick={() => { setMode("signup"); setErr(""); }} style={{ color: "#c4401f", cursor: "pointer" }}>sign up</span></>
+            <>no account? <span onClick={switchMode} style={{ color: "#c4401f", cursor: "pointer" }}>sign up</span></>
           ) : (
-            <>have an account? <span onClick={() => { setMode("login"); setErr(""); }} style={{ color: "#c4401f", cursor: "pointer" }}>sign in</span></>
+            <>have an account? <span onClick={switchMode} style={{ color: "#c4401f", cursor: "pointer" }}>sign in</span></>
           )}
         </div>
       </div>

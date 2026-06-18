@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import "@/App.css";
 import { CategoryPage } from "./components/ForumComponents";
 import { AuthModal } from "./components/AuthModal";
+import { useAuth } from "./hooks/useAuth";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
-const SESSION_KEY = "forum_session_username";
 
 // ============================================================
-// HELPER FUNCTIONS
+// HELPER FUNCTIONS & CONSTANTS
 // ============================================================
 
 function timeAgo(iso) {
@@ -72,16 +72,10 @@ function Avatar({ name, size = 32, imageUrl = null }) {
 }
 
 // ============================================================
-// MAIN APP COMPONENT
+// TOAST NOTIFICATION HOOK
 // ============================================================
 
-export default function App() {
-  const [booted, setBooted] = useState(false);
-  const [bootError, setBootError] = useState(null);
-  const [categories, setCategories] = useState([]);
-  const [user, setUser] = useState(null);
-  const [view, setView] = useState({ page: "home" });
-  const [authOpen, setAuthOpen] = useState(false);
+function useToast() {
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
 
@@ -91,73 +85,57 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   }, []);
 
+  return { toast, showToast };
+}
+
+// ============================================================
+// MAIN APP COMPONENT
+// ============================================================
+
+export default function App() {
+  const [booted, setBooted] = useState(false);
+  const [bootError, setBootError] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [view, setView] = useState({ page: "home" });
+  const [authOpen, setAuthOpen] = useState(false);
+  
+  const { user, login, logout, refreshUser, restoreSession } = useAuth();
+  const { toast, showToast } = useToast();
+
+  // Initialize app on mount
   useEffect(() => {
-    (async () => {
+    const initApp = async () => {
       try {
         const { data } = await axios.get(`${API}/categories`);
         setCategories(data || []);
-
-        const savedUsername = localStorage.getItem(SESSION_KEY);
-        if (savedUsername) {
-          try {
-            const { data: u } = await axios.get(`${API}/users/${savedUsername}`);
-            if (u) setUser(u);
-          } catch (error) {
-            localStorage.removeItem(SESSION_KEY);
-          }
-        }
+        await restoreSession();
         setBooted(true);
       } catch (error) {
         setBootError(error.message || "Could not reach the backend.");
         setBooted(true);
       }
-    })();
-  }, []);
+    };
+    
+    initApp();
+  }, [restoreSession]);
 
-  const handleLogin = useCallback((u) => {
-    setUser(u);
-    localStorage.setItem(SESSION_KEY, u.username);
+  const handleLogin = useCallback((userData) => {
+    login(userData);
     setAuthOpen(false);
-  }, []);
+  }, [login]);
 
   const handleLogout = useCallback(() => {
-    setUser(null);
-    localStorage.removeItem(SESSION_KEY);
+    logout();
     showToast("Signed out.");
     setView({ page: "home" });
-  }, [showToast]);
-
-  const refreshUser = useCallback(async () => {
-    if (!user) return;
-    try {
-      const { data } = await axios.get(`${API}/users/${user.username}`);
-      if (data) setUser(data);
-    } catch (error) {
-      console.error("Failed to refresh user", error);
-    }
-  }, [user]);
+  }, [logout, showToast]);
 
   if (!booted) {
-    return (
-      <div style={rootStyle}>
-        <FontLoader />
-        <div style={{ padding: 60, textAlign: "center", color: "#5a5450", fontFamily: "JetBrains Mono, monospace", fontSize: 13 }}>
-          loading forum...
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (bootError) {
-    return (
-      <div style={rootStyle}>
-        <FontLoader />
-        <div style={{ maxWidth: 520, margin: "80px auto", padding: 24, border: "1px solid #3a2218", borderRadius: 4, background: "#171411" }}>
-          <h2 style={{ fontFamily: "Oswald, sans-serif", color: "#c4401f", marginTop: 0 }}>Can't reach the backend</h2>
-          <p style={{ color: "#a89a85", fontSize: 14, lineHeight: 1.6 }}>{bootError}</p>
-        </div>
-      </div>
-    );
+    return <ErrorScreen error={bootError} />;
   }
 
   return (
@@ -185,22 +163,18 @@ export default function App() {
             showToast={showToast}
           />
         )}
-        {view.page === "thread" && (
-          <div style={{ padding: 40, textAlign: "center", color: "#7a7066" }}>
-            Thread page - Coming soon
-          </div>
-        )}
-        {view.page === "profile" && (
-          <div style={{ padding: 40, textAlign: "center", color: "#7a7066" }}>
-            Profile page - Coming soon
-          </div>
-        )}
+        {view.page === "thread" && <PlaceholderPage title="Thread page - Coming soon" />}
+        {view.page === "profile" && <PlaceholderPage title="Profile page - Coming soon" />}
       </main>
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} showToast={showToast} />}
       {toast && <Toast msg={toast.msg} kind={toast.kind} />}
     </div>
   );
 }
+
+// ============================================================
+// UI COMPONENTS
+// ============================================================
 
 const rootStyle = {
   background: "#0d0c0b",
@@ -222,6 +196,37 @@ function FontLoader() {
       ::placeholder { color: #5a5450; }
       a { color: #c4401f; text-decoration: none; }
     `}</style>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <div style={rootStyle}>
+      <FontLoader />
+      <div style={{ padding: 60, textAlign: "center", color: "#5a5450", fontFamily: "JetBrains Mono, monospace", fontSize: 13 }}>
+        loading forum...
+      </div>
+    </div>
+  );
+}
+
+function ErrorScreen({ error }) {
+  return (
+    <div style={rootStyle}>
+      <FontLoader />
+      <div style={{ maxWidth: 520, margin: "80px auto", padding: 24, border: "1px solid #3a2218", borderRadius: 4, background: "#171411" }}>
+        <h2 style={{ fontFamily: "Oswald, sans-serif", color: "#c4401f", marginTop: 0 }}>Can't reach the backend</h2>
+        <p style={{ color: "#a89a85", fontSize: 14, lineHeight: 1.6 }}>{error}</p>
+      </div>
+    </div>
+  );
+}
+
+function PlaceholderPage({ title }) {
+  return (
+    <div style={{ padding: 40, textAlign: "center", color: "#7a7066" }}>
+      {title}
+    </div>
   );
 }
 
@@ -281,7 +286,7 @@ function Home({ categories, onOpenCategory }) {
   const [counts, setCounts] = useState({});
 
   useEffect(() => {
-    (async () => {
+    const fetchCounts = async () => {
       const countMap = {};
       for (const cat of categories) {
         try {
@@ -292,43 +297,79 @@ function Home({ categories, onOpenCategory }) {
         }
       }
       setCounts(countMap);
-    })();
+    };
+    
+    if (categories.length > 0) {
+      fetchCounts();
+    }
   }, [categories]);
 
   return (
     <div data-testid="home-page">
-      <div style={{ padding: "48px 0 36px", borderBottom: "1px solid #1c1814" }}>
-        <h1 style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600, fontSize: 38, margin: 0, letterSpacing: 0.5, lineHeight: 1.1 }}>
-          Welcome to Looksmax Community
-        </h1>
-        <p style={{ color: "#7a7066", fontSize: 15, marginTop: 10, maxWidth: 540, lineHeight: 1.6 }}>
-          Your go-to forum for looksmaxxing discussion, ratings, and community support.
-        </p>
+      <HeroSection />
+      <CategoriesList categories={categories} counts={counts} onOpenCategory={onOpenCategory} />
+    </div>
+  );
+}
+
+function HeroSection() {
+  return (
+    <div style={{ padding: "48px 0 36px", borderBottom: "1px solid #1c1814" }}>
+      <h1 style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600, fontSize: 38, margin: 0, letterSpacing: 0.5, lineHeight: 1.1 }}>
+        Welcome to Looksmax Community
+      </h1>
+      <p style={{ color: "#7a7066", fontSize: 15, marginTop: 10, maxWidth: 540, lineHeight: 1.6 }}>
+        Your go-to forum for looksmaxxing discussion, ratings, and community support.
+      </p>
+    </div>
+  );
+}
+
+function CategoriesList({ categories, counts, onOpenCategory }) {
+  return (
+    <div style={{ marginTop: 28 }}>
+      {categories.map((cat) => (
+        <CategoryRow 
+          key={cat.id} 
+          category={cat} 
+          count={counts[cat.id] ?? 0} 
+          onClick={() => onOpenCategory(cat.id)} 
+        />
+      ))}
+    </div>
+  );
+}
+
+function CategoryRow({ category, count, onClick }) {
+  const [hover, setHover] = useState(false);
+  
+  return (
+    <div
+      onClick={onClick}
+      data-testid={`category-${category.id}`}
+      style={{ 
+        display: "flex", 
+        alignItems: "center", 
+        gap: 16, 
+        padding: "18px 4px", 
+        borderBottom: "1px solid #1c1814", 
+        cursor: "pointer",
+        background: hover ? "#13110f" : "transparent"
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <div style={{ width: 38, height: 38, borderRadius: 3, background: "#171411", border: "1px solid #2e2722", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Icon name={category.icon} size={18} style={{ color: "#c4401f" }} />
       </div>
-      <div style={{ marginTop: 28 }}>
-        {categories.map((cat) => (
-          <div
-            key={cat.id}
-            onClick={() => onOpenCategory(cat.id)}
-            data-testid={`category-${cat.id}`}
-            style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 4px", borderBottom: "1px solid #1c1814", cursor: "pointer" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#13110f")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-          >
-            <div style={{ width: 38, height: 38, borderRadius: 3, background: "#171411", border: "1px solid #2e2722", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Icon name={cat.icon} size={18} style={{ color: "#c4401f" }} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500, fontSize: 17, letterSpacing: 0.3 }}>{cat.name}</div>
-              <div style={{ color: "#5a5450", fontSize: 13, marginTop: 2 }}>{cat.description}</div>
-            </div>
-            <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#5a5450", textAlign: "right", minWidth: 60 }}>
-              {counts[cat.id] ?? 0} threads
-            </div>
-            <Icon name="arrow" size={16} style={{ color: "#3a3530" }} />
-          </div>
-        ))}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500, fontSize: 17, letterSpacing: 0.3 }}>{category.name}</div>
+        <div style={{ color: "#5a5450", fontSize: 13, marginTop: 2 }}>{category.description}</div>
       </div>
+      <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#5a5450", textAlign: "right", minWidth: 60 }}>
+        {count} threads
+      </div>
+      <Icon name="arrow" size={16} style={{ color: "#3a3530" }} />
     </div>
   );
 }
