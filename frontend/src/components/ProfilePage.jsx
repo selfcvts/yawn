@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import RichTextEditor from "./RichTextEditor";
 import { ImageEditor } from "./ImageEditor";
+import { BadgeDisplay } from "./BadgeDisplay";
 import { EMOJI_GG_REACTIONS, getEmojiUrl } from "../utils/emojis";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -353,6 +354,9 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
             <h1 style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600, fontSize: 32, margin: 0 }}>
               {user.username}
             </h1>
+            {user.badge_details && user.badge_details.length > 0 && (
+              <BadgeDisplay badges={user.badge_details} size="medium" />
+            )}
             {user.custom_badge && (
               <span style={{ fontSize: 14, padding: "4px 10px", background: "#2e2722", borderRadius: 3, color: "#e8d9c0" }}>
                 {user.custom_badge}

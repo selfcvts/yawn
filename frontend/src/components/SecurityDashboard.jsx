@@ -17,7 +17,7 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-export function SecurityDashboard({ ownerUsername, onBack, showToast }) {
+export function SecurityDashboard({ ownerUsername, onBack, showToast, onNavigateToBadges }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -81,12 +81,33 @@ export function SecurityDashboard({ ownerUsername, onBack, showToast }) {
         padding: 24,
         marginBottom: 24
       }}>
-        <h1 style={{ fontFamily: "Oswald, sans-serif", fontSize: 28, marginTop: 0, marginBottom: 8, color: "#c4401f" }}>
-          🔒 Security Dashboard
-        </h1>
-        <p style={{ color: "#7a7066", fontSize: 14, margin: 0 }}>
-          Owner-only: Monitor all users, IPs, and manage roles
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h1 style={{ fontFamily: "Oswald, sans-serif", fontSize: 28, marginTop: 0, marginBottom: 8, color: "#c4401f" }}>
+              🔒 Security Dashboard
+            </h1>
+            <p style={{ color: "#7a7066", fontSize: 14, margin: 0 }}>
+              Owner-only: Monitor all users, IPs, and manage roles
+            </p>
+          </div>
+          <button
+            onClick={() => onNavigateToBadges && onNavigateToBadges()}
+            style={{
+              background: "#DAA520",
+              color: "#0d0c0b",
+              border: "none",
+              borderRadius: 4,
+              padding: "12px 20px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "Oswald, sans-serif",
+              textTransform: "uppercase"
+            }}
+          >
+            🏅 Manage Badges
+          </button>
+        </div>
       </div>
 
       {/* Stats */}

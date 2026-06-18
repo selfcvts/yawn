@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import RichTextEditor from "./RichTextEditor";
 import { ImageEditor } from "./ImageEditor";
+import { BadgeDisplay } from "./BadgeDisplay";
 import { EMOJI_GG_REACTIONS, getEmojiUrl } from "../utils/emojis";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -437,6 +438,11 @@ function PostItem({ post, isOP, index, user, onVote, onReact, onOpenProfile }) {
           >
             {post.author}
           </div>
+          {post.author_badges && post.author_badges.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              <BadgeDisplay badges={post.author_badges} size="small" />
+            </div>
+          )}
           {isOP && (
             <div style={{ fontSize: 11, color: "#c4401f", marginTop: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Original Poster

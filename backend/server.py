@@ -47,7 +47,8 @@ class User(BaseModel):
     profile_banner: Optional[str] = None  # base64 or URL
     profile_music: Optional[str] = None  # audio URL
     profile_color: Optional[str] = None
-    custom_badge: Optional[str] = None
+    custom_badge: Optional[str] = None  # Legacy single badge text
+    badges: list = []  # List of badge IDs
     is_banned: bool = False
     is_muted: bool = False
     muted_until: Optional[datetime] = None
@@ -148,6 +149,19 @@ class AdminAction(BaseModel):
     value: Optional[int] = None
     badge_text: Optional[str] = None
     duration_hours: Optional[int] = None
+
+class Badge(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # "VIP", "Contributor", etc.
+    text: str  # Display text
+    icon: Optional[str] = None  # Emoji or icon
+    background_color: Optional[str] = None  # Hex color like "#DAA520"
+    background_image: Optional[str] = None  # Image URL
+    border_color: Optional[str] = None
+    text_color: str = "#ffffff"
+    created_by: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -301,6 +315,15 @@ async def get_user_profile(username: str):
     user = await db.users.find_one({"username": username}, {"_id": 0, "pass_hash": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Populate badge details
+    badge_ids = user.get("badges", [])
+    if badge_ids:
+        badges = await db.badges.find({"id": {"$in": badge_ids}}, {"_id": 0}).to_list(100)
+        user["badge_details"] = badges
+    else:
+        user["badge_details"] = []
+    
     return user
 
 @api_router.patch("/users/{username}")
@@ -520,12 +543,20 @@ async def get_posts(thread_id: str):
         {"_id": 0}
     ).sort("created_at", 1).to_list(10000)
     
-    # Enrich with vote data
+    # Enrich with vote data and author badges
     for post in posts:
         votes = await db.votes.find({"post_id": post["id"]}, {"_id": 0}).to_list(10000)
         post["score"] = sum(v.get("direction", 0) for v in votes)
         post["upvoters"] = [v["username"] for v in votes if v.get("direction", 1) > 0]
         post["downvoters"] = [v["username"] for v in votes if v.get("direction", -1) < 0]
+        
+        # Get author badges
+        author_user = await db.users.find_one({"username": post["author"]}, {"_id": 0, "badges": 1})
+        if author_user and author_user.get("badges"):
+            badges = await db.badges.find({"id": {"$in": author_user["badges"]}}, {"_id": 0}).to_list(100)
+            post["author_badges"] = badges
+        else:
+            post["author_badges"] = []
     
     return posts
 
@@ -852,6 +883,135 @@ async def upload_custom_emoji(
     
     await db.custom_emojis.insert_one(emoji.model_dump())
     return emoji.model_dump()
+
+# ============================================================
+# OWNER-ONLY ROUTES - BADGE MANAGEMENT
+# ============================================================
+
+@api_router.post("/owner/badges/create")
+async def create_badge(
+    name: str = Form(...),
+    text: str = Form(...),
+    icon: Optional[str] = Form(None),
+    background_color: Optional[str] = Form(None),
+    background_image: Optional[UploadFile] = File(None),
+    border_color: Optional[str] = Form(None),
+    text_color: str = Form("#ffffff"),
+    owner_username: str = Form(...)
+):
+    """Owner creates a new badge"""
+    owner = await db.users.find_one({"username": owner_username}, {"_id": 0})
+    if not owner or owner.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
+    
+    # Handle background image upload if provided
+    bg_image_url = None
+    if background_image:
+        try:
+            contents = await background_image.read()
+            if len(contents) > 2 * 1024 * 1024:  # 2MB limit
+                raise HTTPException(status_code=400, detail="Badge image must be less than 2MB")
+            
+            # Save to uploads
+            filename = f"badge_{uuid.uuid4()}_{background_image.filename}"
+            upload_path = ROOT_DIR / "uploads" / filename
+            with open(upload_path, "wb") as f:
+                f.write(contents)
+            
+            bg_image_url = f"/uploads/{filename}"
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to upload badge image: {str(e)}")
+    
+    badge = Badge(
+        name=name,
+        text=text,
+        icon=icon,
+        background_color=background_color,
+        background_image=bg_image_url,
+        border_color=border_color,
+        text_color=text_color,
+        created_by=owner_username
+    )
+    
+    await db.badges.insert_one(badge.model_dump())
+    
+    return badge.model_dump()
+
+@api_router.get("/badges")
+async def get_all_badges():
+    """Get all available badges"""
+    badges = await db.badges.find({}, {"_id": 0}).to_list(100)
+    return badges
+
+@api_router.post("/owner/badges/assign")
+async def assign_badge_to_user(
+    target_username: str = Form(...),
+    badge_id: str = Form(...),
+    owner_username: str = Form(...)
+):
+    """Owner assigns a badge to a user"""
+    owner = await db.users.find_one({"username": owner_username}, {"_id": 0})
+    if not owner or owner.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
+    
+    # Verify badge exists
+    badge = await db.badges.find_one({"id": badge_id}, {"_id": 0})
+    if not badge:
+        raise HTTPException(status_code=404, detail="Badge not found")
+    
+    # Add badge to user's badges array (if not already present)
+    user = await db.users.find_one({"username": target_username}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    badges = user.get("badges", [])
+    if badge_id not in badges:
+        badges.append(badge_id)
+        await db.users.update_one(
+            {"username": target_username},
+            {"$set": {"badges": badges}}
+        )
+    
+    return {"message": f"Assigned badge '{badge['name']}' to {target_username}"}
+
+@api_router.post("/owner/badges/remove")
+async def remove_badge_from_user(
+    target_username: str = Form(...),
+    badge_id: str = Form(...),
+    owner_username: str = Form(...)
+):
+    """Owner removes a badge from a user"""
+    owner = await db.users.find_one({"username": owner_username}, {"_id": 0})
+    if not owner or owner.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
+    
+    # Remove badge from user's badges array
+    await db.users.update_one(
+        {"username": target_username},
+        {"$pull": {"badges": badge_id}}
+    )
+    
+    return {"message": f"Removed badge from {target_username}"}
+
+@api_router.delete("/owner/badges/{badge_id}")
+async def delete_badge(badge_id: str, owner_username: str):
+    """Owner deletes a badge (also removes from all users)"""
+    owner = await db.users.find_one({"username": owner_username}, {"_id": 0})
+    if not owner or owner.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
+    
+    # Delete badge
+    result = await db.badges.delete_one({"id": badge_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Badge not found")
+    
+    # Remove from all users
+    await db.users.update_many(
+        {},
+        {"$pull": {"badges": badge_id}}
+    )
+    
+    return {"message": "Badge deleted"}
 
 # ============================================================
 # OWNER-ONLY ROUTES

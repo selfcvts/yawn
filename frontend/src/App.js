@@ -6,6 +6,7 @@ import { AuthModal } from "./components/AuthModal";
 import { ProfilePageSimple as ProfilePage } from "./components/ProfilePageSimple";
 import { ThreadPage } from "./components/ThreadPage";
 import { SecurityDashboard } from "./components/SecurityDashboard";
+import { BadgeManager } from "./components/BadgeManager";
 import { useAuth } from "./hooks/useAuth";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -180,6 +181,14 @@ export default function App() {
           <SecurityDashboard
             ownerUsername={user.username}
             onBack={() => setView({ page: "home" })}
+            onNavigateToBadges={() => setView({ page: "badge-manager" })}
+            showToast={showToast}
+          />
+        )}
+        {view.page === "badge-manager" && user?.role === "owner" && (
+          <BadgeManager
+            ownerUsername={user.username}
+            onBack={() => setView({ page: "security" })}
             showToast={showToast}
           />
         )}
