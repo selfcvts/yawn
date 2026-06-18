@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -42,7 +42,7 @@ class User(BaseModel):
     last_check_in: Optional[datetime] = None
     posts: int = 0
     rep: int = 0
-    role: str = "user"  # user, mod, admin, owner
+    role: str = "user"  # user, moderator, admin, owner
     profile_picture: Optional[str] = None  # base64 or URL
     profile_banner: Optional[str] = None  # base64 or URL
     profile_music: Optional[str] = None  # audio URL
@@ -53,6 +53,9 @@ class User(BaseModel):
     muted_until: Optional[datetime] = None
     last_mega_rep: Optional[datetime] = None
     last_mega_dislike: Optional[datetime] = None
+    last_login_ip: Optional[str] = None
+    last_login_at: Optional[datetime] = None
+    ip_history: list = []  # List of {ip, timestamp} dicts
 
 class UserCreate(BaseModel):
     username: str
@@ -77,6 +80,7 @@ class Category(BaseModel):
     icon: str
     sort_order: int
     admin_only: bool = False  # For "News" category
+    owner_only: bool = False  # For "Security Dashboard"
 
 class Thread(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -178,13 +182,14 @@ def is_same_day(dt1: Optional[datetime], dt2: datetime) -> bool:
 async def init_db():
     # Create categories
     categories_data = [
-        {"id": "rot_community", "name": "Rot Community", "description": "General community discussion", "icon": "flame", "sort_order": 1, "admin_only": False},
-        {"id": "news", "name": "News", "description": "Official announcements (Admin only)", "icon": "pin", "sort_order": 2, "admin_only": True},
-        {"id": "best", "name": "Best of the Best Threads", "description": "Curated excellent content", "icon": "star", "sort_order": 3, "admin_only": False},
-        {"id": "random_questions", "name": "Random Questions", "description": "Ask your random questions", "icon": "brain", "sort_order": 4, "admin_only": False},
-        {"id": "rate_me", "name": "Rate Me", "description": "Get rated by the community", "icon": "user", "sort_order": 5, "admin_only": False},
-        {"id": "off_topic", "name": "Off Topic", "description": "Everything else", "icon": "scroll", "sort_order": 6, "admin_only": False},
-        {"id": "different_languages", "name": "Different Languages", "description": "Discussion in other languages", "icon": "globe", "sort_order": 7, "admin_only": False},
+        {"id": "rot_community", "name": "Rot Community", "description": "General community discussion", "icon": "flame", "sort_order": 1, "admin_only": False, "owner_only": False},
+        {"id": "news", "name": "News", "description": "Official announcements (Admin only)", "icon": "pin", "sort_order": 2, "admin_only": True, "owner_only": False},
+        {"id": "best", "name": "Best of the Best Threads", "description": "Curated excellent content", "icon": "star", "sort_order": 3, "admin_only": False, "owner_only": False},
+        {"id": "random_questions", "name": "Random Questions", "description": "Ask your random questions", "icon": "brain", "sort_order": 4, "admin_only": False, "owner_only": False},
+        {"id": "rate_me", "name": "Rate Me", "description": "Get rated by the community", "icon": "user", "sort_order": 5, "admin_only": False, "owner_only": False},
+        {"id": "off_topic", "name": "Off Topic", "description": "Everything else", "icon": "scroll", "sort_order": 6, "admin_only": False, "owner_only": False},
+        {"id": "different_languages", "name": "Different Languages", "description": "Discussion in other languages", "icon": "globe", "sort_order": 7, "admin_only": False, "owner_only": False},
+        {"id": "owner_security", "name": "🔒 Security Dashboard", "description": "Owner only - User monitoring and security", "icon": "shield", "sort_order": 0, "admin_only": False, "owner_only": True},
     ]
     
     for cat in categories_data:
@@ -253,7 +258,7 @@ async def signup(user_data: UserCreate):
     return user_response
 
 @api_router.post("/auth/login")
-async def login(credentials: UserLogin):
+async def login(credentials: UserLogin, request: Request):
     user = await db.users.find_one({"username": credentials.username}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -264,7 +269,31 @@ async def login(credentials: UserLogin):
     if user.get("is_banned"):
         raise HTTPException(status_code=403, detail="Account is banned")
     
+    # Track IP address
+    client_ip = request.client.host
+    if request.headers.get("x-forwarded-for"):
+        client_ip = request.headers.get("x-forwarded-for").split(",")[0].strip()
+    
+    # Update login tracking
+    now = datetime.now(timezone.utc)
+    ip_history = user.get("ip_history", [])
+    ip_history.append({"ip": client_ip, "timestamp": now.isoformat()})
+    # Keep only last 50 IP entries
+    if len(ip_history) > 50:
+        ip_history = ip_history[-50:]
+    
+    await db.users.update_one(
+        {"username": credentials.username},
+        {"$set": {
+            "last_login_ip": client_ip,
+            "last_login_at": now,
+            "ip_history": ip_history
+        }}
+    )
+    
     user.pop('pass_hash')
+    user["last_login_ip"] = client_ip
+    user["last_login_at"] = now
     return user
 
 @api_router.get("/users/{username}")
@@ -369,9 +398,34 @@ async def check_in(username: str):
 # ============================================================
 
 @api_router.get("/categories")
-async def get_categories():
+async def get_categories(username: Optional[str] = None):
+    """Get categories filtered by user role"""
     categories = await db.categories.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
-    return categories
+    
+    # If no user, only show public categories
+    if not username:
+        return [c for c in categories if not c.get("admin_only") and not c.get("owner_only")]
+    
+    # Get user role
+    user = await db.users.find_one({"username": username}, {"_id": 0, "role": 1})
+    if not user:
+        return [c for c in categories if not c.get("admin_only") and not c.get("owner_only")]
+    
+    role = user.get("role", "user")
+    
+    # Filter categories based on role
+    filtered = []
+    for cat in categories:
+        if cat.get("owner_only"):
+            if role == "owner":
+                filtered.append(cat)
+        elif cat.get("admin_only"):
+            if role in ["admin", "owner"]:
+                filtered.append(cat)
+        else:
+            filtered.append(cat)
+    
+    return filtered
 
 @api_router.get("/categories/{category_id}/thread-count")
 async def get_thread_count(category_id: str):
@@ -798,6 +852,73 @@ async def upload_custom_emoji(
     
     await db.custom_emojis.insert_one(emoji.model_dump())
     return emoji.model_dump()
+
+# ============================================================
+# OWNER-ONLY ROUTES
+# ============================================================
+
+@api_router.post("/owner/change-role")
+async def change_user_role(
+    target_username: str = Form(...),
+    new_role: str = Form(...),
+    owner_username: str = Form(...)
+):
+    """Owner can change any user's role to: user, moderator, admin"""
+    # Verify owner
+    owner = await db.users.find_one({"username": owner_username}, {"_id": 0})
+    if not owner or owner.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
+    
+    # Validate new role
+    if new_role not in ["user", "moderator", "admin"]:
+        raise HTTPException(status_code=400, detail="Invalid role. Must be: user, moderator, or admin")
+    
+    # Find target user
+    target = await db.users.find_one({"username": target_username}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Prevent changing owner role
+    if target.get("role") == "owner":
+        raise HTTPException(status_code=400, detail="Cannot change owner role")
+    
+    # Update role
+    await db.users.update_one(
+        {"username": target_username},
+        {"$set": {"role": new_role}}
+    )
+    
+    return {"message": f"Changed {target_username}'s role to {new_role}", "new_role": new_role}
+
+@api_router.get("/owner/security-dashboard")
+async def get_security_dashboard(owner_username: str):
+    """Owner-only: Get all users with IP addresses and security info"""
+    # Verify owner
+    owner = await db.users.find_one({"username": owner_username}, {"_id": 0})
+    if not owner or owner.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Owner access required")
+    
+    # Get all users with security info
+    users = await db.users.find(
+        {},
+        {
+            "_id": 0,
+            "username": 1,
+            "id": 1,
+            "role": 1,
+            "rep": 1,
+            "posts": 1,
+            "joined_at": 1,
+            "last_login_at": 1,
+            "last_login_ip": 1,
+            "ip_history": 1,
+            "is_banned": 1,
+            "is_muted": 1,
+            "email": 1  # If we had email
+        }
+    ).sort("joined_at", -1).to_list(1000)
+    
+    return {"users": users, "total": len(users)}
 
 # ============================================================
 # ADMIN ROUTES

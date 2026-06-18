@@ -5,6 +5,7 @@ import { CategoryPage } from "./components/ForumComponents";
 import { AuthModal } from "./components/AuthModal";
 import { ProfilePageSimple as ProfilePage } from "./components/ProfilePageSimple";
 import { ThreadPage } from "./components/ThreadPage";
+import { SecurityDashboard } from "./components/SecurityDashboard";
 import { useAuth } from "./hooks/useAuth";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -108,7 +109,9 @@ export default function App() {
   useEffect(() => {
     const initApp = async () => {
       try {
-        const { data } = await axios.get(`${API}/categories`);
+        const username = user?.username || null;
+        const url = username ? `${API}/categories?username=${username}` : `${API}/categories`;
+        const { data } = await axios.get(url);
         setCategories(data || []);
         await restoreSession();
         setBooted(true);
@@ -119,11 +122,19 @@ export default function App() {
     };
     
     initApp();
-  }, [restoreSession]);
+  }, [restoreSession, user]);
 
-  const handleLogin = useCallback((userData) => {
+  const handleLogin = useCallback(async (userData) => {
     login(userData);
     setAuthOpen(false);
+    // Reload categories to show owner/admin-only categories
+    try {
+      const url = userData?.username ? `${API}/categories?username=${userData.username}` : `${API}/categories`;
+      const { data } = await axios.get(url);
+      setCategories(data || []);
+    } catch (error) {
+      console.error("Failed to reload categories", error);
+    }
   }, [login]);
 
   const handleLogout = useCallback(() => {
@@ -152,7 +163,25 @@ export default function App() {
       />
       <main style={{ maxWidth: 920, margin: "0 auto", padding: "0 20px 80px" }}>
         {view.page === "home" && (
-          <Home categories={categories} onOpenCategory={(id) => setView({ page: "category", categoryId: id })} />
+          <Home 
+            categories={categories} 
+            onOpenCategory={(id) => {
+              // Check if it's the security dashboard
+              const category = categories.find(c => c.id === id);
+              if (category && category.owner_only) {
+                setView({ page: "security" });
+              } else {
+                setView({ page: "category", categoryId: id });
+              }
+            }} 
+          />
+        )}
+        {view.page === "security" && user?.role === "owner" && (
+          <SecurityDashboard
+            ownerUsername={user.username}
+            onBack={() => setView({ page: "home" })}
+            showToast={showToast}
+          />
         )}
         {view.page === "category" && (
           <CategoryPage
