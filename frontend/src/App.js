@@ -272,7 +272,7 @@ function Header({ user, onAuthOpen, onLogout, onHome, onProfile }) {
     <header style={{ borderBottom: "1px solid #241f1a", background: "linear-gradient(180deg, #131110, #0d0c0b)", position: "sticky", top: 0, zIndex: 50 }}>
       <div style={{ maxWidth: 920, margin: "0 auto", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div onClick={onHome} style={{ cursor: "pointer", display: "flex", alignItems: "baseline", gap: 10 }}>
-          <span style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: 1, color: "#e8d9c0" }}>LOOKSMAX</span>
+          <span style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: 1, color: "#e8d9c0" }}>ROT COMMUNITY</span>
           <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: "#5a5450", letterSpacing: 0.5 }}>community forum</span>
         </div>
         {user ? (
@@ -336,10 +336,10 @@ function HeroSection() {
   return (
     <div style={{ padding: "48px 0 36px", borderBottom: "1px solid #1c1814" }}>
       <h1 style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600, fontSize: 38, margin: 0, letterSpacing: 0.5, lineHeight: 1.1 }}>
-        Welcome to Looksmax Community
+        Welcome to Rot Community
       </h1>
       <p style={{ color: "#7a7066", fontSize: 15, marginTop: 10, maxWidth: 540, lineHeight: 1.6 }}>
-        Your go-to forum for looksmaxxing discussion, ratings, and community support.
+        Your go-to forum for discussion, ratings, and community support.
       </p>
     </div>
   );

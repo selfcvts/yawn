@@ -178,10 +178,10 @@ def is_same_day(dt1: Optional[datetime], dt2: datetime) -> bool:
 async def init_db():
     # Create categories
     categories_data = [
-        {"id": "looksmaxxing", "name": "Looksmaxxing", "description": "General looksmaxxing discussion", "icon": "flame", "sort_order": 1, "admin_only": False},
+        {"id": "rot_community", "name": "Rot Community", "description": "General community discussion", "icon": "flame", "sort_order": 1, "admin_only": False},
         {"id": "news", "name": "News", "description": "Official announcements (Admin only)", "icon": "pin", "sort_order": 2, "admin_only": True},
         {"id": "best", "name": "Best of the Best Threads", "description": "Curated excellent content", "icon": "star", "sort_order": 3, "admin_only": False},
-        {"id": "looksmaxxing_questions", "name": "Looksmaxxing Questions", "description": "Ask your looksmaxxing questions", "icon": "brain", "sort_order": 4, "admin_only": False},
+        {"id": "random_questions", "name": "Random Questions", "description": "Ask your random questions", "icon": "brain", "sort_order": 4, "admin_only": False},
         {"id": "rate_me", "name": "Rate Me", "description": "Get rated by the community", "icon": "user", "sort_order": 5, "admin_only": False},
         {"id": "off_topic", "name": "Off Topic", "description": "Everything else", "icon": "scroll", "sort_order": 6, "admin_only": False},
         {"id": "different_languages", "name": "Different Languages", "description": "Discussion in other languages", "icon": "globe", "sort_order": 7, "admin_only": False},

@@ -147,7 +147,7 @@ export function AuthModal({ onClose, onLogin, showToast }) {
         </div>
         
         <p style={{ color: "#5a5450", fontSize: 12.5, marginTop: 4, marginBottom: 20 }}>
-          Join the looksmax community forum.
+          Join the rot community forum.
         </p>
 
         <AuthForm mode={mode} onSubmit={handleSubmit} busy={busy} error={err} />
