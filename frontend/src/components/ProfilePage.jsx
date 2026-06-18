@@ -468,6 +468,7 @@ function Tab({ label, active, onClick }) {
 function ProfilePostItem({ post, currentUser, profileOwner, onDelete, onReact }) {
   const [hover, setHover] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('all');
   
   const canDelete = currentUser && (
     currentUser.username === post.author || 
@@ -477,6 +478,26 @@ function ProfilePostItem({ post, currentUser, profileOwner, onDelete, onReact })
 
   const reactions = post.reactions || {};
   const totalReactions = Object.values(reactions).reduce((sum, users) => sum + users.length, 0);
+  
+  const categories = [
+    { id: 'all', label: 'All' },
+    { id: 'pepe', label: 'Pepe' },
+    { id: 'twitch', label: 'Twitch' },
+    { id: 'reactions', label: 'Memes' },
+    { id: 'positive', label: '+' },
+    { id: 'negative', label: '-' },
+  ];
+  
+  const displayEmojis = activeCategory === 'all' 
+    ? EMOJI_GG_REACTIONS 
+    : EMOJI_GG_REACTIONS.filter(e => {
+        if (activeCategory === 'pepe') return e.name.includes('pepe');
+        if (activeCategory === 'twitch') return ['pog', 'kek', 'lul', 'kappa', 'monka', 'sadge', 'peped'].some(t => e.name.includes(t));
+        if (activeCategory === 'reactions') return ['chad', 'based', 'copium', 'hopium', 'despair', 'aware', 'bruh', 'clown', 'sus', 'simp'].includes(e.name);
+        if (activeCategory === 'positive') return ['heart', 'fire', '100', 'star', 'clap', 'thumbsup', 'ok', 'party', 'hype'].some(t => e.name.includes(t));
+        if (activeCategory === 'negative') return ['skull', 'rip', 'dead', 'cry', 'angry', 'thumbsdown', 'ban', 'cringe', 'yikes', 'rage'].includes(e.name);
+        return true;
+      });
 
   return (
     <div
@@ -521,7 +542,7 @@ function ProfilePostItem({ post, currentUser, profileOwner, onDelete, onReact })
           )}
 
           {/* Reactions Bar */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
             <div style={{ position: "relative" }}>
               <button
                 onClick={() => setShowReactions(!showReactions)}
@@ -529,13 +550,16 @@ function ProfilePostItem({ post, currentUser, profileOwner, onDelete, onReact })
                   background: "#2e2722",
                   border: "1px solid #3a3530",
                   borderRadius: 3,
-                  padding: "4px 10px",
+                  padding: "6px 12px",
                   cursor: "pointer",
                   fontSize: 12,
                   color: "#a89a85",
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
+                  fontFamily: "Oswald, sans-serif",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
                 }}
               >
                 😊 React {totalReactions > 0 && `(${totalReactions})`}
@@ -550,30 +574,76 @@ function ProfilePostItem({ post, currentUser, profileOwner, onDelete, onReact })
                   background: "#171411",
                   border: "1px solid #2e2722",
                   borderRadius: 4,
-                  padding: 8,
-                  display: "flex",
-                  gap: 6,
-                  zIndex: 10,
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                  padding: 12,
+                  zIndex: 100,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.7)",
+                  minWidth: 320,
+                  maxWidth: 400,
                 }}>
-                  {EMOJI_GG_REACTIONS.map(emoji => (
-                    <button
-                      key={emoji.name}
-                      onClick={() => {
-                        onReact(emoji.name);
-                        setShowReactions(false);
-                      }}
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 4,
-                      }}
-                      title={emoji.name}
-                    >
-                      <img src={emoji.url} alt={emoji.name} style={{ width: 24, height: 24 }} />
-                    </button>
-                  ))}
+                  {/* Category Tabs */}
+                  <div style={{ display: "flex", gap: 6, marginBottom: 10, borderBottom: "1px solid #2e2722", paddingBottom: 8 }}>
+                    {categories.map(cat => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setActiveCategory(cat.id)}
+                        style={{
+                          background: activeCategory === cat.id ? "#2e2722" : "transparent",
+                          border: "none",
+                          color: activeCategory === cat.id ? "#c4401f" : "#5a5450",
+                          padding: "4px 10px",
+                          fontSize: 11,
+                          cursor: "pointer",
+                          borderRadius: 3,
+                          textTransform: "uppercase",
+                          letterSpacing: 0.5,
+                          fontFamily: "Oswald, sans-serif",
+                        }}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {/* Emoji Grid */}
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(8, 1fr)",
+                    gap: 6,
+                    maxHeight: 240,
+                    overflowY: "auto",
+                    padding: 4,
+                  }}>
+                    {displayEmojis.map(emoji => (
+                      <button
+                        key={emoji.name}
+                        onClick={() => {
+                          onReact(emoji.name);
+                          setShowReactions(false);
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "1px solid transparent",
+                          cursor: "pointer",
+                          padding: 4,
+                          borderRadius: 3,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#2e2722";
+                          e.currentTarget.style.borderColor = "#3a3530";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                          e.currentTarget.style.borderColor = "transparent";
+                        }}
+                        title={emoji.name}
+                      >
+                        <img src={emoji.url} alt={emoji.name} style={{ width: 28, height: 28 }} />
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -594,17 +664,19 @@ function ProfilePostItem({ post, currentUser, profileOwner, onDelete, onReact })
                         background: hasReacted ? "#2e2722" : "#1c1814",
                         border: `1px solid ${hasReacted ? "#c4401f" : "#2e2722"}`,
                         borderRadius: 3,
-                        padding: "4px 8px",
+                        padding: "5px 10px",
                         cursor: "pointer",
                         display: "flex",
                         alignItems: "center",
-                        gap: 4,
-                        fontSize: 12,
-                        color: "#a89a85",
+                        gap: 6,
+                        fontSize: 13,
+                        color: "#e8d9c0",
+                        fontFamily: "Oswald, sans-serif",
+                        fontWeight: 600,
                       }}
                       title={users.join(", ")}
                     >
-                      {emojiUrl && <img src={emojiUrl} alt={emojiName} style={{ width: 16, height: 16 }} />}
+                      {emojiUrl && <img src={emojiUrl} alt={emojiName} style={{ width: 18, height: 18 }} />}
                       <span>{users.length}</span>
                     </button>
                   );
