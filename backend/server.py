@@ -44,7 +44,7 @@ class User(BaseModel):
     rep: int = 0
     role: str = "user"  # user, mod, admin, owner
     profile_picture: Optional[str] = None  # base64 or URL
-    profile_banner: Optional[str] = None
+    profile_banner: Optional[str] = None  # base64 or URL
     profile_music: Optional[str] = None  # audio URL
     profile_color: Optional[str] = None
     custom_badge: Optional[str] = None
@@ -95,7 +95,10 @@ class Post(BaseModel):
     author: str
     body: str
     rich_content: Optional[dict] = None  # For storing gradient/font/color data
+    image_url: Optional[str] = None  # uploaded image
+    video_url: Optional[str] = None  # uploaded video
     is_op: bool = False
+    reactions: dict = {}  # {emoji_name: [list of usernames]}
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Vote(BaseModel):
@@ -281,6 +284,57 @@ async def update_user_profile(username: str, updates: UserUpdate):
     await db.users.update_one({"username": username}, {"$set": update_data})
     return await get_user_profile(username)
 
+@api_router.post("/users/{username}/upload-picture")
+async def upload_profile_picture(username: str, file: UploadFile = File(...)):
+    """Upload profile picture"""
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    contents = await file.read()
+    base64_data = base64.b64encode(contents).decode('utf-8')
+    data_url = f"data:{file.content_type};base64,{base64_data}"
+    
+    await db.users.update_one(
+        {"username": username},
+        {"$set": {"profile_picture": data_url}}
+    )
+    
+    return {"url": data_url}
+
+@api_router.post("/users/{username}/upload-banner")
+async def upload_profile_banner(username: str, file: UploadFile = File(...)):
+    """Upload profile banner"""
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    contents = await file.read()
+    base64_data = base64.b64encode(contents).decode('utf-8')
+    data_url = f"data:{file.content_type};base64,{base64_data}"
+    
+    await db.users.update_one(
+        {"username": username},
+        {"$set": {"profile_banner": data_url}}
+    )
+    
+    return {"url": data_url}
+
+@api_router.post("/users/{username}/upload-music")
+async def upload_profile_music(username: str, file: UploadFile = File(...)):
+    """Upload profile music"""
+    if not file.content_type.startswith("audio/"):
+        raise HTTPException(status_code=400, detail="File must be an audio file")
+    
+    contents = await file.read()
+    base64_data = base64.b64encode(contents).decode('utf-8')
+    data_url = f"data:{file.content_type};base64,{base64_data}"
+    
+    await db.users.update_one(
+        {"username": username},
+        {"$set": {"profile_music": data_url}}
+    )
+    
+    return {"url": data_url}
+
 @api_router.post("/users/{username}/checkin")
 async def check_in(username: str):
     user = await db.users.find_one({"username": username}, {"_id": 0})
@@ -426,7 +480,9 @@ async def create_reply(
     thread_id: str = Form(...),
     author: str = Form(...),
     body: str = Form(...),
-    rich_content: Optional[str] = Form(None)
+    rich_content: Optional[str] = Form(None),
+    image_url: Optional[str] = Form(None),
+    video_url: Optional[str] = Form(None)
 ):
     # Check if user is muted
     user = await db.users.find_one({"username": author})
@@ -442,7 +498,10 @@ async def create_reply(
         author=author,
         body=body,
         rich_content=rich_data,
-        is_op=False
+        image_url=image_url,
+        video_url=video_url,
+        is_op=False,
+        reactions={}
     )
     
     await db.posts.insert_one(post.model_dump())
@@ -451,6 +510,36 @@ async def create_reply(
     await db.users.update_one({"username": author}, {"$inc": {"posts": 1}})
     
     return post.model_dump()
+
+@api_router.post("/posts/{post_id}/react")
+async def add_post_reaction(post_id: str, reaction: Reaction):
+    """Add or toggle a reaction to a thread post"""
+    post = await db.posts.find_one({"id": post_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    reactions = post.get("reactions", {})
+    emoji_name = reaction.emoji_name
+    username = reaction.username
+    
+    # Initialize emoji reactions list if doesn't exist
+    if emoji_name not in reactions:
+        reactions[emoji_name] = []
+    
+    # Toggle reaction
+    if username in reactions[emoji_name]:
+        reactions[emoji_name].remove(username)
+        if len(reactions[emoji_name]) == 0:
+            del reactions[emoji_name]
+    else:
+        reactions[emoji_name].append(username)
+    
+    await db.posts.update_one(
+        {"id": post_id},
+        {"$set": {"reactions": reactions}}
+    )
+    
+    return {"message": "Reaction updated", "reactions": reactions}
 
 # ============================================================
 # VOTING & REP ROUTES

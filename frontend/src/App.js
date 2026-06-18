@@ -3,7 +3,8 @@ import axios from "axios";
 import "@/App.css";
 import { CategoryPage } from "./components/ForumComponents";
 import { AuthModal } from "./components/AuthModal";
-import { ProfilePage } from "./components/ProfilePage";
+import { ProfilePageSimple as ProfilePage } from "./components/ProfilePageSimple";
+import { ThreadPage } from "./components/ThreadPage";
 import { useAuth } from "./hooks/useAuth";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -164,7 +165,18 @@ export default function App() {
             showToast={showToast}
           />
         )}
-        {view.page === "thread" && <PlaceholderPage title="Thread page - Coming soon" />}
+        {view.page === "thread" && (
+          <ThreadPage
+            threadId={view.threadId}
+            categoryId={view.categoryId}
+            categories={categories}
+            user={user}
+            onBack={() => setView({ page: "category", categoryId: view.categoryId })}
+            requireAuth={() => setAuthOpen(true)}
+            showToast={showToast}
+            onOpenProfile={(username) => setView({ page: "profile", username })}
+          />
+        )}
         {view.page === "profile" && (
           <ProfilePage
             username={view.username}

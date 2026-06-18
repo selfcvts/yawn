@@ -85,8 +85,12 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
   const [imageUrl, setImageUrl] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showCustomize, setShowCustomize] = useState(false);
   const fileInputRef = useRef(null);
   const videoInputRef = useRef(null);
+  const pictureInputRef = useRef(null);
+  const bannerInputRef = useRef(null);
+  const musicInputRef = useRef(null);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -224,6 +228,72 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
     }
   };
 
+  const handleProfilePictureUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Image must be less than 5MB", "error");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      await axios.post(`${API}/users/${username}/upload-picture`, formData);
+      showToast("Profile picture updated");
+      loadProfile();
+    } catch (error) {
+      showToast("Failed to upload picture", "error");
+    }
+    setUploading(false);
+  };
+
+  const handleBannerUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Image must be less than 5MB", "error");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      await axios.post(`${API}/users/${username}/upload-banner`, formData);
+      showToast("Banner updated");
+      loadProfile();
+    } catch (error) {
+      showToast("Failed to upload banner", "error");
+    }
+    setUploading(false);
+  };
+
+  const handleMusicUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToast("Audio must be less than 10MB", "error");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      await axios.post(`${API}/users/${username}/upload-music`, formData);
+      showToast("Profile music updated");
+      loadProfile();
+    } catch (error) {
+      showToast("Failed to upload music", "error");
+    }
+    setUploading(false);
+  };
+
   if (loading) {
     return (
       <div style={{ padding: 40, textAlign: "center", color: "#5a5450", fontSize: 13 }}>
@@ -244,8 +314,15 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
     <div data-testid="profile-page">
       <BackRow onBack={onBack} label="back" />
 
+      {/* Profile Banner */}
+      {user.profile_banner && (
+        <div style={{ marginTop: 20, height: 200, borderRadius: 4, overflow: "hidden", border: "1px solid #2e2722" }}>
+          <img src={user.profile_banner} alt="Banner" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        </div>
+      )}
+
       {/* Profile Header */}
-      <div style={{ display: "flex", gap: 24, marginTop: 24, padding: "24px 0", borderBottom: "1px solid #1c1814" }}>
+      <div style={{ display: "flex", gap: 24, marginTop: user.profile_banner ? -60 : 24, padding: "24px 0", borderBottom: "1px solid #1c1814", position: "relative" }}>
         <Avatar name={user.username} size={140} imageUrl={user.profile_picture} />
         
         <div style={{ flex: 1 }}>
@@ -258,7 +335,77 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
                 {user.custom_badge}
               </span>
             )}
+            {currentUser && currentUser.username === username && (
+              <button
+                onClick={() => setShowCustomize(!showCustomize)}
+                style={{
+                  background: "#2e2722",
+                  border: "1px solid #3a3530",
+                  borderRadius: 3,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  color: "#a89a85",
+                  cursor: "pointer",
+                  fontFamily: "Oswald, sans-serif",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}
+              >
+                Customize
+              </button>
+            )}
           </div>
+
+          {showCustomize && currentUser && currentUser.username === username && (
+            <div style={{ background: "#2e2722", border: "1px solid #3a3530", borderRadius: 4, padding: 12, marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input
+                  ref={pictureInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePictureUpload}
+                  style={{ display: "none" }}
+                />
+                <button
+                  onClick={() => pictureInputRef.current?.click()}
+                  disabled={uploading}
+                  style={{ ...mediaBtn, fontSize: 11 }}
+                >
+                  Upload Picture
+                </button>
+
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleBannerUpload}
+                  style={{ display: "none" }}
+                />
+                <button
+                  onClick={() => bannerInputRef.current?.click()}
+                  disabled={uploading}
+                  style={{ ...mediaBtn, fontSize: 11 }}
+                >
+                  Upload Banner
+                </button>
+
+                <input
+                  ref={musicInputRef}
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleMusicUpload}
+                  style={{ display: "none" }}
+                />
+                <button
+                  onClick={() => musicInputRef.current?.click()}
+                  disabled={uploading}
+                  style={{ ...mediaBtn, fontSize: 11 }}
+                >
+                  Upload Music
+                </button>
+              </div>
+            </div>
+          )}
 
           <div style={{ color: "#7a7066", fontSize: 13, marginBottom: 16 }}>
             <div>Joined: {new Date(user.joined_at).toLocaleDateString()}</div>
