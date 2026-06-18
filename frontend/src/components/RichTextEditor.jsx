@@ -3,7 +3,7 @@ import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
 import { ColorPicker } from './ColorPicker';
 
-// Expanded Google Fonts list (50+ fonts)
+// Expanded Google Fonts list (180+ fonts)
 const GOOGLE_FONTS = [
   "Roboto", "Open Sans", "Lato", "Montserrat", "Oswald", "Raleway", "Ubuntu",
   "Poppins", "Nunito", "Merriweather", "Playfair Display", "Crimson Text",
@@ -34,7 +34,7 @@ const GOOGLE_FONTS = [
   "Plus Jakarta Sans", "Be Vietnam Pro", "Epilogue", "Space Mono", "Azeret Mono",
   "Overpass", "Overpass Mono", "Chivo", "Frank Ruhl Libre", "Aleo", "Gelasio",
   "Literata", "Newsreader", "Source Serif Pro", "Crimson Pro", "Ovo",
-  "Belleza", "Shrikhand", "Righteous", "Bungee Inline", "Modak", "Lobster Two",
+  "Belleza", "Shrikhand", "Bungee Inline", "Modak", "Lobster Two",
   "Paytone One", "Acme", "Archivo Narrow", "Barlow Condensed", "Pathway Gothic One",
   "Yanone Kaffeesatz", "Questrial", "Armata", "Signika", "Cantarell",
   "Assistant", "Varela Round", "Maven Pro", "Hind", "Mukta", "Catamaran",
@@ -44,7 +44,7 @@ const GOOGLE_FONTS = [
   "Quando", "Poly", "Kameron", "Podkova", "Copse", "Lusitana", "Adamina",
   "Unna", "Halant", "Trocchi", "Average", "Radley", "Stoke", "Belgrano",
   "Vidaloka", "Cambo", "Enriqueta", "Mate", "Rasa", "Alike", "Prociono",
-  "Brawler", "Mate SC", "Lora", "Crimson Text", "Cinzel Decorative"
+  "Brawler", "Mate SC", "Cinzel Decorative"
 ];
 
 // Load Google Fonts dynamically
@@ -306,7 +306,7 @@ export default function RichTextEditor({ value, onChange, onRichContentChange, p
           width: "100%",
           minHeight: 110,
           background: textColor?.type === "gradient" ? textColor.gradient : "#0d0c0b",
-          color: textColor?.type === "solid" ? textColor.color : "#e8d9c0",
+          color: textColor?.type === "gradient" ? "#fff" : (textColor?.type === "solid" ? textColor.color : "#e8d9c0"),
           border: "1px solid #2e2722",
           borderTop: "none",
           borderRadius: "0 0 3px 3px",
@@ -318,6 +318,7 @@ export default function RichTextEditor({ value, onChange, onRichContentChange, p
           outline: "none",
           resize: "vertical",
           caretColor: "#c4401f",
+          textShadow: textColor?.type === "gradient" ? "0 0 2px rgba(0,0,0,0.8)" : "none"
         }}
       />
     </div>

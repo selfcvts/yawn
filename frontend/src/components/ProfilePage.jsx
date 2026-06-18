@@ -136,10 +136,25 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
     setUploading(false);
   };
 
-  const handleImageSave = (editedDataUrl) => {
-    setImageUrl(editedDataUrl);
-    setEditingImage(null);
-    showToast("Image edited successfully");
+  const handleImageSave = async (editedDataUrl) => {
+    try {
+      setUploading(true);
+      const response = await fetch(editedDataUrl);
+      const blob = await response.blob();
+      
+      const formData = new FormData();
+      formData.append("file", blob, "edited-image.png");
+      
+      const { data } = await axios.post(`${API}/upload/image`, formData);
+      setImageUrl(data.url);
+      setEditingImage(null);
+      showToast("Image edited successfully");
+    } catch (error) {
+      showToast("Failed to save edited image", "error");
+      console.error(error);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleVideoUpload = async (e) => {

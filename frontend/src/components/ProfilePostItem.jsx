@@ -115,7 +115,19 @@ export default function ProfilePostItem({ post, currentUser, profileOwner, onDel
             <span style={{ color: "#5a5450", fontSize: 12 }}>{timeAgo(post.created_at)}</span>
           </div>
           
-          <div style={{ color: "#e8d9c0", lineHeight: 1.6, whiteSpace: "pre-wrap", marginBottom: 12 }}>
+          <div style={{ 
+            color: post.rich_content?.color?.type === "solid" ? post.rich_content.color.color : "#e8d9c0",
+            background: post.rich_content?.color?.type === "gradient" ? post.rich_content.color.gradient : "transparent",
+            fontFamily: post.rich_content?.font || "inherit",
+            fontWeight: post.rich_content?.bold ? "bold" : "normal",
+            fontStyle: post.rich_content?.italic ? "italic" : "normal",
+            lineHeight: 1.6, 
+            whiteSpace: "pre-wrap", 
+            marginBottom: 12,
+            padding: post.rich_content?.color?.type === "gradient" ? "8px" : "0",
+            borderRadius: post.rich_content?.color?.type === "gradient" ? "4px" : "0",
+            textShadow: post.rich_content?.color?.type === "gradient" ? "0 0 2px rgba(0,0,0,0.8)" : "none"
+          }}>
             {post.body}
           </div>
 

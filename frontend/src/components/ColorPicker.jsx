@@ -14,7 +14,7 @@ export function ColorPicker({ onSelect, onClose }) {
     "#c4401f", "#f39c12", "#e74c3c", "#9b59b6", "#3498db",
     "#1abc9c", "#2ecc71", "#f1c40f", "#e67e22", "#95a5a6",
     "#34495e", "#16a085", "#27ae60", "#2980b9", "#8e44ad",
-    "#f39c12", "#d35400", "#c0392b", "#7f8c8d", "#2c3e50"
+    "#d35400", "#c0392b", "#7f8c8d", "#2c3e50"
   ];
 
   const gradientTypes = [

@@ -134,11 +134,26 @@ export function ThreadPage({ threadId, categoryId, categories, user, onBack, req
     setUploading(false);
   };
 
-  const handleImageSave = (editedDataUrl) => {
-    // Convert data URL to image URL (in a real app, you'd upload this)
-    setImageUrl(editedDataUrl);
-    setEditingImage(null);
-    showToast("Image edited successfully");
+  const handleImageSave = async (editedDataUrl) => {
+    // Convert data URL to blob and re-upload
+    try {
+      setUploading(true);
+      const response = await fetch(editedDataUrl);
+      const blob = await response.blob();
+      
+      const formData = new FormData();
+      formData.append("file", blob, "edited-image.png");
+      
+      const { data } = await axios.post(`${API}/upload/image`, formData);
+      setImageUrl(data.url);
+      setEditingImage(null);
+      showToast("Image edited successfully");
+    } catch (error) {
+      showToast("Failed to save edited image", "error");
+      console.error(error);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleVideoUpload = async (e) => {
@@ -438,7 +453,19 @@ function PostItem({ post, isOP, index, user, onVote, onReact, onOpenProfile }) {
             {timeAgo(post.created_at)}
           </div>
 
-          <div style={{ color: "#e8d9c0", lineHeight: 1.7, whiteSpace: "pre-wrap", marginBottom: 16 }}>
+          <div style={{ 
+            color: post.rich_content?.color?.type === "solid" ? post.rich_content.color.color : "#e8d9c0", 
+            background: post.rich_content?.color?.type === "gradient" ? post.rich_content.color.gradient : "transparent",
+            fontFamily: post.rich_content?.font || "inherit",
+            fontWeight: post.rich_content?.bold ? "bold" : "normal",
+            fontStyle: post.rich_content?.italic ? "italic" : "normal",
+            lineHeight: 1.7, 
+            whiteSpace: "pre-wrap", 
+            marginBottom: 16,
+            padding: post.rich_content?.color?.type === "gradient" ? "8px" : "0",
+            borderRadius: post.rich_content?.color?.type === "gradient" ? "4px" : "0",
+            textShadow: post.rich_content?.color?.type === "gradient" ? "0 0 2px rgba(0,0,0,0.8)" : "none"
+          }}>
             {post.body}
           </div>
 

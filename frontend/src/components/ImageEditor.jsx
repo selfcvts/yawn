@@ -27,16 +27,17 @@ export function ImageEditor({ imageUrl, onSave, onCancel }) {
 
   useEffect(() => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
     img.src = imageUrl;
     img.onload = () => {
       imageRef.current = img;
       drawCanvas();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageUrl]);
 
   useEffect(() => {
     drawCanvas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scale, position]);
 
   const drawCanvas = () => {
