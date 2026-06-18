@@ -1,56 +1,375 @@
-import { useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import "@/App.css";
+import data from '@emoji-mart/data';
+import Picker from '@emoji-mart/react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+const SESSION_KEY = "forum_session_username";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
+// ============================================================
+// HELPER FUNCTIONS
+// ============================================================
 
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
+function timeAgo(iso) {
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d ago`;
+  const mo = Math.floor(d / 30);
+  if (mo < 12) return `${mo}mo ago`;
+  return `${Math.floor(mo / 12)}y ago`;
+}
 
-  return (
-    <div>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
+const ICONS = {
+  flame: "M12 2c.5 3-2 5-3.5 7C7 11 6 13 6 15a6 6 0 0012 0c0-2-1-3.5-2-5 .5 1.5 0 3-1 3.5.5-2-.5-4-2-5.5C13.5 6.5 13 4 12 2z",
+  barbell: "M4 9v6M2 10v4M6 8v8M9 11h6M18 8v8M22 10v4M20 9v6",
+  brain: "M9 4a3 3 0 00-3 3v1a3 3 0 00-1 5.5A3 3 0 008 18a3 3 0 003-2v-9a3 3 0 00-2-3zM15 4a3 3 0 013 3v1a3 3 0 011 5.5A3 3 0 0116 18a3 3 0 01-3-2V7a3 3 0 012-3z",
+  star: "M12 2l2 6 6 2-5 4 1 6-6-3-6 3 1-6-5-4 6-2z",
+  user: "M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0",
+  pin: "M12 2l2 6 6 2-5 4 1 6-6-3-6 3 1-6-5-4 6-2z",
+  close: "M6 6l12 12M18 6L6 18",
+  lock: "M6 11V8a6 6 0 0112 0v3M5 11h14v9H5z",
+  arrow: "M5 12h14M13 6l6 6-6 6",
+  scroll: "M7 4h10a2 2 0 012 2v13a2 2 0 01-2-2H7a2 2 0 01-2-2V6a2 2 0 012-2zM7 4a2 2 0 00-2 2v11a2 2 0 002 2M9 9h6M9 13h4",
+  globe: "M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z",
+  up: "M12 5l7 8h-5v6h-4v-6H5z",
+  down: "M12 19l-7-8h5V5h4v6h5z",
+  settings: "M12 15a3 3 0 100-6 3 3 0 000 6z",
 };
 
-function App() {
+function Icon({ name, size = 16, style = {} }) {
+  const d = ICONS[name];
+  if (!d) return null;
   return (
-    <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, ...style }}>
+      <path d={d} />
+    </svg>
+  );
+}
+
+function EmberMeter({ streak }) {
+  const pct = Math.min(100, (streak / 30) * 100);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Icon name="flame" size={14} style={{ color: streak > 0 ? "#c4401f" : "#5a5450" }} />
+      <div style={{ flex: 1, height: 4, background: "#241f1a", borderRadius: 2, overflow: "hidden", minWidth: 40 }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg,#7a2412,#c4401f)", transition: "width .4s" }} />
+      </div>
+      <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#a89a85" }}>{streak}d</span>
     </div>
   );
 }
 
-export default App;
+function Avatar({ name, size = 32, imageUrl = null }) {
+  if (imageUrl) {
+    return (
+      <div style={{ width: size, height: size, borderRadius: 3, overflow: "hidden", border: "1px solid #2e2722", flexShrink: 0 }}>
+        <img src={imageUrl} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      </div>
+    );
+  }
+  
+  const initial = (name || "?").charAt(0).toUpperCase();
+  let h = 0;
+  for (let i = 0; i < (name || "").length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: 3, flexShrink: 0,
+        background: `hsl(${h}, 35%, 18%)`, border: "1px solid #2e2722",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "Oswald, sans-serif", fontWeight: 500, fontSize: size * 0.45,
+        color: `hsl(${h}, 45%, 70%)`, letterSpacing: 0.5,
+      }}
+    >
+      {initial}
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN APP COMPONENT
+// ============================================================
+
+export default function App() {
+  const [booted, setBooted] = useState(false);
+  const [bootError, setBootError] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [user, setUser] = useState(null);
+  const [view, setView] = useState({ page: "home" });
+  const [authOpen, setAuthOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
+
+  const showToast = useCallback((msg, kind = "default") => {
+    setToast({ msg, kind });
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await axios.get(`${API}/categories`);
+        setCategories(data || []);
+
+        const savedUsername = localStorage.getItem(SESSION_KEY);
+        if (savedUsername) {
+          const { data: u } = await axios.get(`${API}/users/${savedUsername}`);
+          if (u) setUser(u);
+        }
+        setBooted(true);
+      } catch (error) {
+        setBootError(error.message || "Could not reach the backend.");
+        setBooted(true);
+      }
+    })();
+  }, []);
+
+  const handleLogin = useCallback((u) => {
+    setUser(u);
+    localStorage.setItem(SESSION_KEY, u.username);
+    setAuthOpen(false);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    setUser(null);
+    localStorage.removeItem(SESSION_KEY);
+    showToast("Signed out.");
+    setView({ page: "home" });
+  }, [showToast]);
+
+  const refreshUser = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data } = await axios.get(`${API}/users/${user.username}`);
+      if (data) setUser(data);
+    } catch (error) {
+      console.error("Failed to refresh user", error);
+    }
+  }, [user]);
+
+  if (!booted) {
+    return (
+      <div style={rootStyle}>
+        <FontLoader />
+        <div style={{ padding: 60, textAlign: "center", color: "#5a5450", fontFamily: "JetBrains Mono, monospace", fontSize: 13 }}>
+          loading forum...
+        </div>
+      </div>
+    );
+  }
+
+  if (bootError) {
+    return (
+      <div style={rootStyle}>
+        <FontLoader />
+        <div style={{ maxWidth: 520, margin: "80px auto", padding: 24, border: "1px solid #3a2218", borderRadius: 4, background: "#171411" }}>
+          <h2 style={{ fontFamily: "Oswald, sans-serif", color: "#c4401f", marginTop: 0 }}>Can't reach the backend</h2>
+          <p style={{ color: "#a89a85", fontSize: 14, lineHeight: 1.6 }}>{bootError}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={rootStyle}>
+      <FontLoader />
+      <Header
+        user={user}
+        onAuthOpen={() => setAuthOpen(true)}
+        onLogout={handleLogout}
+        onHome={() => setView({ page: "home" })}
+        onProfile={() => user && setView({ page: "profile", username: user.username })}
+        onAdmin={() => setView({ page: "admin" })}
+      />
+      <main style={{ maxWidth: 920, margin: "0 auto", padding: "0 20px 80px" }}>
+        {view.page === "home" && (
+          <Home categories={categories} onOpenCategory={(id) => setView({ page: "category", categoryId: id })} />
+        )}
+        {view.page === "category" && (
+          <CategoryPage
+            categories={categories}
+            categoryId={view.categoryId}
+            user={user}
+            onBack={() => setView({ page: "home" })}
+            onOpenThread={(id) => setView({ page: "thread", threadId: id, categoryId: view.categoryId })}
+            requireAuth={() => setAuthOpen(true)}
+            showToast={showToast}
+          />
+        )}
+        {view.page === "thread" && (
+          <ThreadPage
+            threadId={view.threadId}
+            categoryId={view.categoryId}
+            categories={categories}
+            user={user}
+            onBack={() => setView({ page: "category", categoryId: view.categoryId })}
+            requireAuth={() => setAuthOpen(true)}
+            showToast={showToast}
+            onOpenProfile={(uname) => setView({ page: "profile", username: uname })}
+            refreshUser={refreshUser}
+          />
+        )}
+        {view.page === "profile" && (
+          <ProfilePage
+            username={view.username}
+            currentUser={user}
+            onBack={() => setView({ page: "home" })}
+            showToast={showToast}
+            refreshUser={refreshUser}
+          />
+        )}
+        {view.page === "admin" && user && ["admin", "owner"].includes(user.role) && (
+          <AdminPanel
+            currentUser={user}
+            onBack={() => setView({ page: "home" })}
+            showToast={showToast}
+          />
+        )}
+      </main>
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={handleLogin} showToast={showToast} />}
+      {toast && <Toast msg={toast.msg} kind={toast.kind} />}
+    </div>
+  );
+}
+
+const rootStyle = {
+  background: "#0d0c0b",
+  color: "#e8d9c0",
+  minHeight: "100vh",
+  fontFamily: "Inter, sans-serif",
+  fontSize: 14,
+  position: "relative",
+};
+
+function FontLoader() {
+  return (
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      input, textarea, button { font-family: Inter, sans-serif; }
+      ::selection { background: #c4401f; color: #0d0c0b; }
+      ::placeholder { color: #5a5450; }
+      a { color: #c4401f; text-decoration: none; }
+    `}</style>
+  );
+}
+
+function Toast({ msg, kind }) {
+  return (
+    <div
+      data-testid="toast-message"
+      style={{
+        position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
+        background: "#171411", border: `1px solid ${kind === "error" ? "#7a2412" : "#2e2722"}`,
+        borderLeft: `3px solid ${kind === "error" ? "#c4401f" : "#9c8a6f"}`,
+        color: "#e8d9c0", padding: "10px 18px", borderRadius: 3, fontSize: 13,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.5)", zIndex: 1000, maxWidth: 360,
+      }}
+    >
+      {msg}
+    </div>
+  );
+}
+
+function Header({ user, onAuthOpen, onLogout, onHome, onProfile, onAdmin }) {
+  return (
+    <header style={{ borderBottom: "1px solid #241f1a", background: "linear-gradient(180deg, #131110, #0d0c0b)", position: "sticky", top: 0, zIndex: 50 }}>
+      <div style={{ maxWidth: 920, margin: "0 auto", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div onClick={onHome} style={{ cursor: "pointer", display: "flex", alignItems: "baseline", gap: 10 }}>
+          <span style={{ fontFamily: "Oswald, sans-serif", fontWeight: 700, fontSize: 26, letterSpacing: 1, color: "#e8d9c0" }}>LOOKSMAX</span>
+          <span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, color: "#5a5450", letterSpacing: 0.5 }}>community forum</span>
+        </div>
+        {user ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {["admin", "owner"].includes(user.role) && (
+              <button data-testid="admin-panel-button" onClick={onAdmin} style={{ ...ghostBtn, color: "#c4401f" }}>admin</button>
+            )}
+            <div onClick={onProfile} style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+              <Avatar name={user.username} size={26} imageUrl={user.profile_picture} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{user.username}</span>
+              {user.custom_badge && <span style={{ fontSize: 10, marginLeft: 4 }}>{user.custom_badge}</span>}
+            </div>
+            <button data-testid="logout-button" onClick={onLogout} style={ghostBtn}>sign out</button>
+          </div>
+        ) : (
+          <button data-testid="login-button" onClick={onAuthOpen} style={primaryBtn}>enter</button>
+        )}
+      </div>
+    </header>
+  );
+}
+
+const primaryBtn = {
+  background: "#c4401f", color: "#0d0c0b", border: "none", borderRadius: 3,
+  padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+  fontFamily: "Oswald, sans-serif", letterSpacing: 0.5, textTransform: "uppercase",
+};
+const ghostBtn = {
+  background: "transparent", color: "#a89a85", border: "1px solid #2e2722", borderRadius: 3,
+  padding: "7px 14px", fontSize: 12, cursor: "pointer",
+};
+
+function Home({ categories, onOpenCategory }) {
+  const [counts, setCounts] = useState({});
+
+  useEffect(() => {
+    (async () => {
+      const countMap = {};
+      for (const cat of categories) {
+        try {
+          const { data } = await axios.get(`${API}/categories/${cat.id}/thread-count`);
+          countMap[cat.id] = data.count;
+        } catch (error) {
+          countMap[cat.id] = 0;
+        }
+      }
+      setCounts(countMap);
+    })();
+  }, [categories]);
+
+  return (
+    <div data-testid="home-page">
+      <div style={{ padding: "48px 0 36px", borderBottom: "1px solid #1c1814" }}>
+        <h1 style={{ fontFamily: "Oswald, sans-serif", fontWeight: 600, fontSize: 38, margin: 0, letterSpacing: 0.5, lineHeight: 1.1 }}>
+          Welcome to Looksmax Community
+        </h1>
+        <p style={{ color: "#7a7066", fontSize: 15, marginTop: 10, maxWidth: 540, lineHeight: 1.6 }}>
+          Your go-to forum for looksmaxxing discussion, ratings, and community support.
+        </p>
+      </div>
+      <div style={{ marginTop: 28 }}>
+        {categories.map((cat) => (
+          <div
+            key={cat.id}
+            onClick={() => onOpenCategory(cat.id)}
+            data-testid={`category-${cat.id}`}
+            style={{ display: "flex", alignItems: "center", gap: 16, padding: "18px 4px", borderBottom: "1px solid #1c1814", cursor: "pointer" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#13110f")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <div style={{ width: 38, height: 38, borderRadius: 3, background: "#171411", border: "1px solid #2e2722", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Icon name={cat.icon} size={18} style={{ color: "#c4401f" }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: "Oswald, sans-serif", fontWeight: 500, fontSize: 17, letterSpacing: 0.3 }}>{cat.name}</div>
+              <div style={{ color: "#5a5450", fontSize: 13, marginTop: 2 }}>{cat.description}</div>
+            </div>
+            <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, color: "#5a5450", textAlign: "right", minWidth: 60 }}>
+              {counts[cat.id] ?? 0} threads
+            </div>
+            <Icon name="arrow" size={16} style={{ color: "#3a3530" }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
