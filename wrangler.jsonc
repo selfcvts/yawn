@@ -1,0 +1,8 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "yawn",
+  "compatibility_date": "2026-06-19",
+  "assets": {
+    "directory": "./frontend/build"
+  }
+}
