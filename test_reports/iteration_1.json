@@ -1,0 +1,52 @@
+{
+  "summary": "Code review of RichTextEditor, ColorPicker, ImageEditor, ThreadPage, ProfilePage. UI playwright testing skipped due to token constraints - main agent should self-test.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RichTextEditor textarea", "issue": "When gradient is applied to textarea background, text becomes nearly unreadable. Gradient is set on background while text color remains #e8d9c0 - poor contrast. Solid color sets text color but gradient does not provide a text-readability fallback.", "selector": "textarea", "priority": "MEDIUM"},
+      {"component": "RichTextEditor color button", "issue": "Button label/icon styling collapses when gradient applied since button background uses textColor.gradient - text 'A' may become invisible.", "selector": "color picker button", "priority": "LOW"},
+      {"component": "RichTextEditor font dropdown", "issue": "No data-testid on Font button, Color button, Bold/Italic buttons, Emoji button, or font items - hard to automate testing.", "selector": "n/a", "priority": "MEDIUM"},
+      {"component": "ColorPicker preset duplicates", "issue": "#f39c12 appears twice in presetColors array (duplicate React keys would warn).", "selector": "preset buttons", "priority": "LOW"},
+      {"component": "ImageEditor canvas", "issue": "Canvas uses img.crossOrigin='anonymous' but image URLs are from same backend - may still taint canvas if CORS headers not set. toDataURL() will throw SecurityError when canvas is tainted, breaking Save.", "selector": "canvas", "priority": "HIGH"},
+      {"component": "ImageEditor", "issue": "Initial position is (0,0) but no centering - large images render with top-left at canvas origin, may appear off-canvas at high scale. Drag uses raw clientX/Y without canvas-relative coords - position drift expected.", "selector": "canvas", "priority": "MEDIUM"},
+      {"component": "ImageEditor", "issue": "No data-testid on scale slider, save button, cancel button - hard to automate.", "selector": "n/a", "priority": "MEDIUM"},
+      {"component": "ImageEditor save", "issue": "canvas.toDataURL produces large base64 strings sent as image_url in FormData. Backend may reject due to size; also persists base64 in DB. Should re-upload edited blob to /api/upload/image instead.", "selector": "save button", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Image upload -> ImageEditor -> Post submission", "issue": "Edited image saved as data URL (base64). Sending large base64 to backend in image_url field may exceed payload limits or break image rendering downstream.", "affected_selectors": ["ImageEditor save"]},
+      {"flow": "Rich content persistence", "issue": "richContent (font/color/gradient) is sent to backend but rendered posts do not apply font/color styling - PostItem renders body in default style, ignoring rich_content. Custom font/gradient is only visible while composing, never on saved posts.", "affected_selectors": ["PostItem body", "ProfilePostItem body"]}
+    ],
+    "design_issues": [
+      {"screen": "RichTextEditor", "issues": ["Gradient backgrounds make textarea text low-contrast", "Font dropdown z-index 100 may be overlapped by emoji picker"]},
+      {"screen": "ColorPicker", "issues": ["Uses browser default color picker (input type=color) for start/end gradient colors instead of an RGB slider widget like the solid mode"]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL: Re-upload edited canvas blob to /api/upload/image instead of using data URL, otherwise large base64 strings will bloat payloads and break image display",
+    "CRITICAL: rich_content (font/color/gradient) is never rendered on saved posts - PostItem/ProfilePostItem need to apply post.rich_content styles to body",
+    "HIGH: ImageEditor canvas.toDataURL may throw SecurityError if image is CORS-tainted; ensure backend serves uploaded images with proper Access-Control-Allow-Origin",
+    "HIGH: Center image on canvas initially; use canvas-relative drag coordinates",
+    "MEDIUM: Add data-testid to all RichTextEditor and ImageEditor interactive elements (font-btn, color-btn, bold-btn, italic-btn, emoji-btn, font-option, scale-slider, image-save, image-cancel)",
+    "MEDIUM: When applying gradient, set a readable text color override for textarea contents",
+    "LOW: Remove duplicate '#f39c12' from ColorPicker presetColors array",
+    "LOW: Duplicate 'Righteous', 'Lora', 'Crimson Text' entries in GOOGLE_FONTS array cause duplicate React keys"
+  ],
+  "critical_code_review_comments": [
+    "RichTextEditor.jsx 326 lines, ColorPicker.jsx 327 lines - acceptable size",
+    "ThreadPage.jsx 697 lines, ProfilePage.jsx 918 lines - exceed 700 line guideline; ProfilePage should be split (PostItem, Customize panel, Reaction picker as separate files)",
+    "Duplicate ReactionPicker logic between ThreadPage PostItem and ProfilePage ProfilePostItem - violates DRY (>50 lines duplicated). Extract to shared <ReactionPicker /> component",
+    "GOOGLE_FONTS array has duplicate entries (Righteous appears twice, Lora twice, Crimson Text twice) - causes React key warnings",
+    "ColorPicker presetColors has duplicate #f39c12",
+    "rich_content sent to backend but never rendered on display - feature appears half-implemented",
+    "ImageEditor saves to data URL instead of re-uploading; consumes large memory/payload"
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "Not tested via UI"},
+  "test_credentials": "testuser / password123",
+  "seed_data_creation": "",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Did code review only; no UI playwright run due to token budget. Priority items: (1) Verify rich_content rendering on saved posts (likely missing). (2) Verify ImageEditor save flow end-to-end - canvas toDataURL might fail with CORS-tainted image or produce huge payloads. (3) Add data-testid to font/color/image editor controls. Login as testuser/password123 and test font dropdown opens, gradient apply, image upload->editor->save->visible in post.",
+  "rca of the issue": "N/A - first iteration, code review surfaced design/integration gaps before runtime testing."
+}

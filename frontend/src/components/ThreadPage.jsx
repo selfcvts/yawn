@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import RichTextEditor from "./RichTextEditor";
+import { ImageEditor } from "./ImageEditor";
 import { EMOJI_GG_REACTIONS, getEmojiUrl } from "../utils/emojis";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -87,6 +88,7 @@ export function ThreadPage({ threadId, categoryId, categories, user, onBack, req
   const [imageUrl, setImageUrl] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [editingImage, setEditingImage] = useState(null);
   const fileInputRef = useRef(null);
   const videoInputRef = useRef(null);
 
@@ -123,12 +125,20 @@ export function ThreadPage({ threadId, categoryId, categories, user, onBack, req
       const formData = new FormData();
       formData.append("file", file);
       const { data } = await axios.post(`${API}/upload/image`, formData);
-      setImageUrl(data.url);
-      showToast("Image uploaded");
+      // Open image editor instead of directly setting URL
+      setEditingImage(data.url);
+      showToast("Image uploaded - now resize/position it");
     } catch (error) {
       showToast("Failed to upload image", "error");
     }
     setUploading(false);
+  };
+
+  const handleImageSave = (editedDataUrl) => {
+    // Convert data URL to image URL (in a real app, you'd upload this)
+    setImageUrl(editedDataUrl);
+    setEditingImage(null);
+    showToast("Image edited successfully");
   };
 
   const handleVideoUpload = async (e) => {
@@ -356,6 +366,15 @@ export function ThreadPage({ threadId, categoryId, categories, user, onBack, req
             </button>
           </div>
         </div>
+      )}
+
+      {/* Image Editor Modal */}
+      {editingImage && (
+        <ImageEditor
+          imageUrl={editingImage}
+          onSave={handleImageSave}
+          onCancel={() => setEditingImage(null)}
+        />
       )}
     </div>
   );

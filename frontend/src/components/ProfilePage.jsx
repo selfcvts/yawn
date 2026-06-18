@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import RichTextEditor from "./RichTextEditor";
+import { ImageEditor } from "./ImageEditor";
 import { EMOJI_GG_REACTIONS, getEmojiUrl } from "../utils/emojis";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -85,6 +86,7 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
   const [imageUrl, setImageUrl] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [editingImage, setEditingImage] = useState(null);
   const [showCustomize, setShowCustomize] = useState(false);
   const fileInputRef = useRef(null);
   const videoInputRef = useRef(null);
@@ -126,12 +128,18 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
       formData.append("file", file);
 
       const { data } = await axios.post(`${API}/upload/image`, formData);
-      setImageUrl(data.url);
-      showToast("Image uploaded");
+      setEditingImage(data.url);
+      showToast("Image uploaded - now resize/position it");
     } catch (error) {
       showToast("Failed to upload image", "error");
     }
     setUploading(false);
+  };
+
+  const handleImageSave = (editedDataUrl) => {
+    setImageUrl(editedDataUrl);
+    setEditingImage(null);
+    showToast("Image edited successfully");
   };
 
   const handleVideoUpload = async (e) => {
@@ -575,6 +583,15 @@ export function ProfilePage({ username, currentUser, onBack, showToast }) {
           </div>
         )}
       </div>
+
+      {/* Image Editor Modal */}
+      {editingImage && (
+        <ImageEditor
+          imageUrl={editingImage}
+          onSave={handleImageSave}
+          onCancel={() => setEditingImage(null)}
+        />
+      )}
     </div>
   );
 }
