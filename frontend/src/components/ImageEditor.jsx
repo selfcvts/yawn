@@ -32,13 +32,11 @@ export function ImageEditor({ imageUrl, onSave, onCancel }) {
       imageRef.current = img;
       drawCanvas();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageUrl]);
+  }, [imageUrl, drawCanvas]);
 
   useEffect(() => {
     drawCanvas();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scale, position]);
+  }, [scale, position, drawCanvas]);
 
   const drawCanvas = () => {
     const canvas = canvasRef.current;

@@ -24,7 +24,7 @@ export function BadgeManager({ ownerUsername, onBack, showToast }) {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const loadData = async () => {
     try {

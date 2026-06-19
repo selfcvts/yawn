@@ -15,13 +15,13 @@ export function useAuth() {
     // PRODUCTION TODO: Implement httpOnly cookies with server-side session management
     // Security: Vulnerable to XSS attacks - use secure, httpOnly cookies instead
     localStorage.setItem(SESSION_KEY, userData.username);
-  }, []);
+  }, [SESSION_KEY]);
 
   const logout = useCallback(() => {
     setUser(null);
     // NOTE: localStorage used for MVP simplicity - see login() for production TODO
     localStorage.removeItem(SESSION_KEY);
-  }, []);
+  }, [SESSION_KEY]);
 
   const refreshUser = useCallback(async () => {
     if (!user) return;
@@ -30,8 +30,9 @@ export function useAuth() {
       if (data) setUser(data);
     } catch (error) {
       // Silently fail - user will be logged out on next action
+      console.error("Failed to refresh user:", error);
     }
-  }, [user]);
+  }, [user, API]);
 
   const restoreSession = useCallback(async () => {
     // NOTE: localStorage used for MVP simplicity - see login() for production TODO
@@ -44,12 +45,13 @@ export function useAuth() {
           return true;
         }
       } catch (error) {
+        console.error("Session restore failed:", error);
         localStorage.removeItem(SESSION_KEY);
         return false;
       }
     }
     return false;
-  }, []);
+  }, [SESSION_KEY, API]);
 
   return {
     user,

@@ -25,7 +25,7 @@ export function SecurityDashboard({ ownerUsername, onBack, showToast, onNavigate
 
   useEffect(() => {
     loadDashboard();
-  }, [ownerUsername]);
+  }, [ownerUsername, loadDashboard]);
 
   const loadDashboard = async () => {
     try {
@@ -238,8 +238,8 @@ export function SecurityDashboard({ ownerUsername, onBack, showToast, onNavigate
               IP History for {selectedUser}
             </h4>
             <div style={{ display: "grid", gap: 8 }}>
-              {users.find(u => u.username === selectedUser).ip_history.slice(-10).reverse().map((entry, idx) => (
-                <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#a89a85" }}>
+              {users.find(u => u.username === selectedUser).ip_history.slice(-10).reverse().map((entry) => (
+                <div key={`${entry.ip}-${entry.timestamp}`} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#a89a85" }}>
                   <span style={{ fontFamily: "monospace" }}>{entry.ip}</span>
                   <span style={{ color: "#5a5450" }}>{timeAgo(entry.timestamp)}</span>
                 </div>

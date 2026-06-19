@@ -328,7 +328,7 @@ async def get_user_profile(username: str):
 
 @api_router.patch("/users/{username}")
 async def update_user_profile(username: str, updates: UserUpdate):
-    update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
+    update_data = {k: v for k, v in updates.model_dump().items() if v != None}
     
     if not update_data:
         return await get_user_profile(username)
