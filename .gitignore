@@ -83,3 +83,8 @@ android-sdk/
 # Local environment files
 .env
 .emergent/
+.env.*
+*.env
+credentials.json
+*.key
+.credentials
